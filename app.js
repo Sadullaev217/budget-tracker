@@ -92,6 +92,7 @@ function signOut(){
   authMode = 'signin';
   authError = '';
   backupStatus = { msg: '', isError: false };
+  editingId = null;
   hideToast();
   render();
 }
@@ -137,6 +138,7 @@ function deleteTransaction(id){
   const idx = state.transactions.findIndex(t => t.id === id);
   if(idx < 0) return;
   const [item] = state.transactions.splice(idx, 1);
+  if(editingId === id) editingId = null;
   save(); render();
   showUndoToast(`Deleted "${item.note || item.category}".`, () => {
     state.transactions.splice(Math.min(idx, state.transactions.length), 0, item);
@@ -325,18 +327,9 @@ function renderDaily(){
   const selLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const netClass = selDt.net > 0 ? 'net-positive' : (selDt.net < 0 ? 'net-negative' : '');
 
-  const entryLines = selectedEntries.length ? selectedEntries.map(tx => `
-    <div class="ledger-line">
-      <div class="info">
-        <span class="desc">${escapeHtml(tx.note || tx.category)}</span>
-        <span class="cat-tag">${escapeHtml(tx.category)}</span>
-      </div>
-      <div class="right">
-        <span class="amt ${tx.type}">${tx.type==='expense'?'-':'+'}${fmt(tx.amount)}</span>
-        <button class="del" data-del="${tx.id}" aria-label="Delete ${escapeHtml(tx.note || tx.category)} entry, ${tx.type==='expense'?'expense':'income'} of ${fmt(tx.amount)}"><span aria-hidden="true">✕</span></button>
-      </div>
-    </div>
-  `).join('') : `<div class="empty">No entries on this day yet.</div>`;
+  const entryLines = selectedEntries.length
+    ? selectedEntries.map(renderLedgerLine).join('')
+    : `<div class="empty">No entries on this day yet.</div>`;
 
   const cats = dailyType === 'income' ? INCOME_CATS : EXPENSE_CATS;
   const catOptions = cats.map(c => `<option value="${c}">${c}</option>`).join('');
@@ -467,7 +460,11 @@ function focusSelector(){
   }
   return null;
 }
+// Set by actions that know where focus should land after the next render
+// (e.g. back on the Edit button after saving); wins over restoreFocus.
+let pendingFocus = null;
 function restoreFocus(sel){
+  if(pendingFocus){ sel = pendingFocus; pendingFocus = null; }
   if(!sel) return;
   const el = document.querySelector(sel);
   if(el) el.focus({ preventScroll: true });
@@ -571,7 +568,7 @@ function render(){
   `;
 
   document.querySelectorAll('.tab').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ activeTab = btn.dataset.tab; render(); });
+    btn.addEventListener('click', ()=>{ activeTab = btn.dataset.tab; editingId = null; render(); });
   });
   const themeBtn = document.getElementById('theme-toggle');
   if(themeBtn) themeBtn.addEventListener('click', toggleTheme);
@@ -653,12 +650,116 @@ function renderOverview(t){
   `;
 }
 
+// One transaction row, shared by the Transactions and Daily tabs. The row
+// being edited renders as an inline form instead.
+let editingId = null;
+const EDIT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+
+function renderLedgerLine(tx){
+  if(tx.id === editingId) return renderEditForm(tx);
+  const label = escapeHtml(tx.note || tx.category);
+  const kind = tx.type === 'expense' ? 'expense' : 'income';
+  return `
+    <div class="ledger-line">
+      <div class="info">
+        <span class="desc">${label}</span>
+        <span class="cat-tag">${escapeHtml(tx.category)}</span>
+      </div>
+      <div class="right">
+        <span class="amt ${tx.type}">${tx.type==='expense'?'-':'+'}${fmt(tx.amount)}</span>
+        <button type="button" class="del edit" data-edit="${tx.id}" aria-label="Edit ${label} entry, ${kind} of ${fmt(tx.amount)}">${EDIT_ICON}</button>
+        <button type="button" class="del" data-del="${tx.id}" aria-label="Delete ${label} entry, ${kind} of ${fmt(tx.amount)}"><span aria-hidden="true">✕</span></button>
+      </div>
+    </div>
+  `;
+}
+
+function categoryOptions(type, selected){
+  const cats = type === 'income' ? INCOME_CATS : EXPENSE_CATS;
+  const list = cats.includes(selected) || !selected ? cats : [selected, ...cats];   // keep a stored category not in the list
+  return list.map(c => `<option value="${escapeHtml(c)}"${c === selected ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
+}
+
+function renderEditForm(tx){
+  return `
+    <form class="ledger-line editing" id="edit-form" data-edit-form="${tx.id}" aria-label="Edit entry" novalidate>
+      <div class="form-row">
+        <div class="field">
+          <label for="edit-type">Type</label>
+          <select id="edit-type">
+            <option value="expense"${tx.type === 'expense' ? ' selected' : ''}>Expense</option>
+            <option value="income"${tx.type === 'income' ? ' selected' : ''}>Income</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="edit-amount">Amount</label>
+          <input type="number" id="edit-amount" step="0.01" min="0" inputmode="decimal" value="${(tx.amount / 100).toFixed(2)}">
+        </div>
+        <div class="field">
+          <label for="edit-category">Category</label>
+          <select id="edit-category">${categoryOptions(tx.type, tx.category)}</select>
+        </div>
+        <div class="field">
+          <label for="edit-date">Date</label>
+          <input type="date" id="edit-date" value="${tx.date}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field" style="flex: 3;">
+          <label for="edit-note">Note (optional)</label>
+          <input type="text" id="edit-note" value="${escapeHtml(tx.note || '')}">
+        </div>
+      </div>
+      <div class="edit-actions">
+        <button type="submit" class="btn">Save</button>
+        <button type="button" class="btn ghost" id="edit-cancel">Cancel</button>
+      </div>
+    </form>
+  `;
+}
+
+const EDIT_FIELDS = ['edit-type', 'edit-amount', 'edit-category', 'edit-date', 'edit-note'];
+function startEdit(id){
+  clearFields(EDIT_FIELDS);   // don't carry another row's half-edited values over
+  editingId = id;
+  pendingFocus = '#edit-amount';
+  render();
+}
+function stopEdit(){
+  const id = editingId;
+  clearFields(EDIT_FIELDS);
+  editingId = null;
+  pendingFocus = id ? `[data-edit="${CSS.escape(id)}"]` : null;
+  render();
+}
+function saveEdit(){
+  const tx = state.transactions.find(t => t.id === editingId);
+  if(!tx){ stopEdit(); return; }
+  const amountEl = document.getElementById('edit-amount');
+  const dateEl = document.getElementById('edit-date');
+  const ok = validateFields([
+    [amountEl, amountError(amountEl.value)],
+    [dateEl, /^\d{4}-\d{2}-\d{2}$/.test(dateEl.value) ? '' : 'Choose a date.']
+  ]);
+  if(!ok) return;
+  tx.type = document.getElementById('edit-type').value === 'income' ? 'income' : 'expense';
+  tx.amount = toCents(amountEl.value);
+  tx.category = document.getElementById('edit-category').value;
+  tx.date = dateEl.value;
+  tx.note = document.getElementById('edit-note').value.trim();
+  save();
+  stopEdit();
+}
+
 function renderTransactions(t){
   const cats = txType === 'income' ? INCOME_CATS : EXPENSE_CATS;
   const catOptions = cats.map(c => `<option value="${c}">${c}</option>`).join('');
 
+  // Newest date first (stable sort keeps same-day entries in insertion order),
+  // so month groups appear in date order even after back-dated or edited entries.
+  const sorted = state.transactions.slice().sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
   const grouped = {};
-  state.transactions.forEach(tx => {
+  sorted.forEach(tx => {
     const mk = monthKey(tx.date);
     grouped[mk] = grouped[mk] || [];
     grouped[mk].push(tx);
@@ -666,18 +767,7 @@ function renderTransactions(t){
 
   const lines = Object.keys(grouped).length ? Object.entries(grouped).map(([month, txs]) => `
     <div class="ledger-month">${month}</div>
-    ${txs.map(tx => `
-      <div class="ledger-line">
-        <div class="info">
-          <span class="desc">${escapeHtml(tx.note || tx.category)}</span>
-          <span class="cat-tag">${escapeHtml(tx.category)}</span>
-        </div>
-        <div class="right">
-          <span class="amt ${tx.type}">${tx.type==='expense'?'-':'+'}${fmt(tx.amount)}</span>
-          <button class="del" data-del="${tx.id}" aria-label="Delete ${escapeHtml(tx.note || tx.category)} entry, ${tx.type==='expense'?'expense':'income'} of ${fmt(tx.amount)}"><span aria-hidden="true">✕</span></button>
-        </div>
-      </div>
-    `).join('')}
+    ${txs.map(renderLedgerLine).join('')}
   `).join('') : `<div class="empty">No entries yet. Log your first transaction above.</div>`;
 
   return `
@@ -779,6 +869,7 @@ async function importBackupFile(file){
   data.transactions.forEach(t => { if(!t.id) t.id = uid(); });
   data.goals.forEach(g => { if(!g.id) g.id = uid(); });
   state = data;
+  editingId = null;
   hideToast();
   backupStatus = { msg: `Imported ${data.transactions.length} transactions and ${data.goals.length} goals.`, isError: false };
   save();
@@ -830,6 +921,7 @@ function renderGoals(){
 function attachPanelHandlers(t){
   // Enter submits the card's primary button (these cards aren't <form>s)
   document.querySelectorAll('.card input, .goal-card input').forEach(inp => {
+    if(inp.form) return;   // real <form>s (inline edit) submit on Enter natively
     inp.addEventListener('keydown', (e) => {
       if(e.key !== 'Enter') return;
       e.preventDefault();
@@ -937,6 +1029,24 @@ function attachPanelHandlers(t){
   document.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', () => deleteTransaction(btn.dataset.del));
   });
+
+  // Inline edit (Transactions and Daily tabs)
+  document.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => startEdit(btn.dataset.edit));
+  });
+  const editForm = document.getElementById('edit-form');
+  if(editForm){
+    editForm.addEventListener('submit', (e) => { e.preventDefault(); saveEdit(); });
+    document.getElementById('edit-cancel').addEventListener('click', stopEdit);
+    editForm.addEventListener('keydown', (e) => { if(e.key === 'Escape'){ e.preventDefault(); stopEdit(); } });
+    // Changing type swaps the category list in place (no re-render, so other edits survive).
+    const typeSel = document.getElementById('edit-type');
+    typeSel.addEventListener('change', () => {
+      const catSel = document.getElementById('edit-category');
+      const list = typeSel.value === 'income' ? INCOME_CATS : EXPENSE_CATS;
+      catSel.innerHTML = categoryOptions(typeSel.value, list.includes(catSel.value) ? catSel.value : null);
+    });
+  }
 
   // Goals panel
   const addGoalBtn = document.getElementById('add-goal-btn');

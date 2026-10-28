@@ -430,6 +430,21 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
   transition: color .15s, background .15s;
 }
 .del:hover{ color: var(--expense-text); background: var(--expense-bg); }
+.del.edit:hover{ color: var(--text); background: var(--surface-2); }
+.ledger-line .right{ gap: 2px; }
+
+/* Inline edit form replaces a ledger row */
+.ledger-line.editing{
+  display: block;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  margin: 8px 0;
+}
+.ledger-line.editing .form-row{ margin-bottom: 12px; }
+.ledger-line.editing input, .ledger-line.editing select{ background: var(--surface); }
+.edit-actions{ display:flex; gap: 8px; }
 
 .total-line{
   display:flex;
