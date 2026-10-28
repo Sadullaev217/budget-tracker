@@ -41,16 +41,45 @@ function userCurrency(){
 // All on-screen money goes through here so the currency setting applies everywhere.
 function fmt(cents){ return formatMoney(cents, userCurrency()); }
 
-async function hashPassword(pw){
-  if(window.crypto && window.crypto.subtle){
-    try{
-      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw));
-      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
-    }catch(e){ /* fall through to non-crypto fallback below */ }
+// Local password hashing. Still a local demo (anyone with dev tools can read
+// localStorage), but uses the right pattern: PBKDF2-SHA256 with a random
+// per-user salt and OWASP's recommended iteration count.
+const PBKDF2_ALGO = 'pbkdf2-sha256';
+const PBKDF2_ITERATIONS = 600000;
+const hasSubtle = () => !!(window.crypto && window.crypto.subtle);
+const toHex = buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+const fromHex = hex => new Uint8Array(hex.match(/../g).map(h => parseInt(h, 16)));
+
+async function pbkdf2Hex(pw, saltHex, iterations){
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: fromHex(saltHex), iterations }, key, 256);
+  return toHex(bits);
+}
+
+// Pre-PBKDF2 format: unsalted SHA-256 (or a non-crypto hash where Web Crypto
+// is unavailable). Only used to verify, and then upgrade, old accounts.
+async function legacyHash(pw){
+  if(hasSubtle()){
+    try{ return toHex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw))); }
+    catch(e){ /* fall through to non-crypto fallback below */ }
   }
   let h = 0;
   for(let i = 0; i < pw.length; i++){ h = (Math.imul(31, h) + pw.charCodeAt(i)) | 0; }
   return 'fallback:' + h.toString(16);
+}
+
+async function createPasswordRecord(pw){
+  if(!hasSubtle()) return { passwordHash: await legacyHash(pw) };
+  const salt = toHex(crypto.getRandomValues(new Uint8Array(16)));
+  return { algo: PBKDF2_ALGO, salt, iterations: PBKDF2_ITERATIONS, passwordHash: await pbkdf2Hex(pw, salt, PBKDF2_ITERATIONS) };
+}
+
+async function verifyPassword(pw, rec){
+  if(rec.algo === PBKDF2_ALGO){
+    if(!hasSubtle()) return false;
+    return (await pbkdf2Hex(pw, rec.salt, rec.iterations)) === rec.passwordHash;
+  }
+  return (await legacyHash(pw)) === rec.passwordHash;
 }
 
 function getUsers(){
@@ -67,8 +96,12 @@ async function signIn(username, password){
   const users = getUsers();
   const rec = users[username];
   if(!username || !rec){ authError = 'No account found with that username.'; render(); return; }
-  const hash = await hashPassword(password);
-  if(hash !== rec.passwordHash){ authError = 'Incorrect password.'; render(); return; }
+  if(!(await verifyPassword(password, rec))){ authError = 'Incorrect password.'; render(); return; }
+  // Upgrade old unsalted-SHA-256 records now that we know the password.
+  if(rec.algo !== PBKDF2_ALGO && hasSubtle()){
+    users[username] = await createPasswordRecord(password);
+    saveUsers(users);
+  }
   currentUser = username;
   localStorage.setItem(SESSION_KEY, username);
   loadUserData();
@@ -83,7 +116,7 @@ async function signUp(username, password, confirm){
   if(password !== confirm){ authError = 'Passwords do not match.'; render(); return; }
   const users = getUsers();
   if(users[username]){ authError = 'That username is already taken.'; render(); return; }
-  users[username] = { passwordHash: await hashPassword(password) };
+  users[username] = await createPasswordRecord(password);
   saveUsers(users);
   currentUser = username;
   localStorage.setItem(SESSION_KEY, username);

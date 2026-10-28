@@ -39,7 +39,9 @@ node --test
 
 All data lives in your browser's `localStorage`. Nothing is sent anywhere.
 
-The sign-in is a local profile switcher, not real security. Passwords are hashed (SHA-256) before storage, but anyone with access to the browser's dev tools can read or bypass them. Don't treat it as protection for sensitive data.
+The sign-in is a local profile switcher, not real security. Passwords are hashed with PBKDF2-SHA256 (random per-user salt, 600,000 iterations) before storage, but everything lives in the same browser, so anyone with access to its dev tools can read the data or bypass the check. Don't treat it as protection for sensitive data.
+
+Use **Backup** on the Transactions tab to export your data; clearing browser data deletes it.
 
 ## Tech
 
