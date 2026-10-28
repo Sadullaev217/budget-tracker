@@ -327,6 +327,12 @@ input, select{
 }
 input:focus, select:focus{ border-color: var(--focus); background: var(--surface); }
 input::placeholder{ color: var(--text-dimmer); }
+input[aria-invalid="true"]{ border-color: var(--expense-text); }
+.field-error{
+  color: var(--expense-text);
+  font-size: 0.8rem;
+  margin-top: 6px;
+}
 
 .toggle-group{ display:flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow:hidden; background: var(--surface-2); }
 .toggle-btn{

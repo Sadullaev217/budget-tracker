@@ -10,6 +10,13 @@ function toCents(value){
   return Number.isFinite(n) ? Math.round(n * 100) : NaN;
 }
 
+// Validation message for a money input, or '' if it's a valid positive amount.
+function amountError(raw, emptyMsg = 'Enter an amount.'){
+  if(String(raw).trim() === '') return emptyMsg;
+  const cents = toCents(raw);
+  return Number.isFinite(cents) && cents > 0 ? '' : 'Enter an amount greater than 0.';
+}
+
 function fmt(cents){
   const neg = cents < 0;
   const v = (Math.abs(cents) / 100).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -89,5 +96,5 @@ function monthlyExpenseSeries(transactions, now, months = 6){
 }
 
 if(typeof module !== 'undefined' && module.exports){
-  module.exports = { DATA_VERSION, toCents, fmt, localISO, escapeHtml, migrateData, sumTotals, sumDay, monthlyExpenseSeries };
+  module.exports = { DATA_VERSION, toCents, amountError, fmt, localISO, escapeHtml, migrateData, sumTotals, sumDay, monthlyExpenseSeries };
 }

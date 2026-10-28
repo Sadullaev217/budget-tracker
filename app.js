@@ -433,6 +433,38 @@ function restoreDrafts(drafts){
     el.value = drafts[id];
   });
 }
+// Inline field errors. Inserted straight into the DOM (no re-render) and
+// removed as soon as the user edits the field. role="alert" announces them.
+function setFieldError(input, msg, anchor){
+  clearFieldError(input);
+  const err = document.createElement('div');
+  err.className = 'field-error';
+  err.id = input.id + '-error';
+  err.setAttribute('role', 'alert');
+  err.textContent = msg;
+  (anchor || input).insertAdjacentElement('afterend', err);
+  input.setAttribute('aria-invalid', 'true');
+  input.setAttribute('aria-describedby', err.id);
+  input.addEventListener('input', () => clearFieldError(input), { once: true });
+}
+function clearFieldError(input){
+  input.removeAttribute('aria-invalid');
+  input.removeAttribute('aria-describedby');
+  const err = document.getElementById(input.id + '-error');
+  if(err) err.remove();
+}
+// Shows each [input, message, anchor?] that has a message; focuses the first.
+// Returns true when everything is valid.
+function validateFields(checks){
+  const failed = checks.filter(([input, msg, anchor]) => {
+    if(msg){ setFieldError(input, msg, anchor); return true; }
+    clearFieldError(input);
+    return false;
+  });
+  if(failed.length) failed[0][0].focus();
+  return failed.length === 0;
+}
+
 // Called after a successful submit so the form comes back empty rather than restored.
 function clearFields(ids){
   ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
@@ -735,10 +767,11 @@ function attachPanelHandlers(t){
   const addDailyTxBtn = document.getElementById('add-daily-tx-btn');
   if(addDailyTxBtn){
     addDailyTxBtn.addEventListener('click', () => {
-      const amount = toCents(document.getElementById('daily-amount').value);
+      const amountEl = document.getElementById('daily-amount');
+      if(!validateFields([[amountEl, amountError(amountEl.value)]])) return;
+      const amount = toCents(amountEl.value);
       const category = document.getElementById('daily-category').value;
       const note = document.getElementById('daily-note').value.trim();
-      if(!amount || amount <= 0){ return; }
       clearFields(['daily-amount', 'daily-category', 'daily-note']);
       addTransaction({ type: dailyType, amount, category, date: selectedDate, note });
     });
@@ -751,11 +784,12 @@ function attachPanelHandlers(t){
   const addTxBtn = document.getElementById('add-tx-btn');
   if(addTxBtn){
     addTxBtn.addEventListener('click', () => {
-      const amount = toCents(document.getElementById('tx-amount').value);
+      const amountEl = document.getElementById('tx-amount');
+      if(!validateFields([[amountEl, amountError(amountEl.value)]])) return;
+      const amount = toCents(amountEl.value);
       const category = document.getElementById('tx-category').value;
       const date = document.getElementById('tx-date').value || todayISO();
       const note = document.getElementById('tx-note').value.trim();
-      if(!amount || amount <= 0){ return; }
       clearFields(['tx-amount', 'tx-category', 'tx-date', 'tx-note']);
       addTransaction({ type: txType, amount, category, date, note });
     });
@@ -768,9 +802,15 @@ function attachPanelHandlers(t){
   const addGoalBtn = document.getElementById('add-goal-btn');
   if(addGoalBtn){
     addGoalBtn.addEventListener('click', () => {
-      const name = document.getElementById('goal-name').value.trim();
-      const target = toCents(document.getElementById('goal-target').value);
-      if(!name || !target || target <= 0){ return; }
+      const nameEl = document.getElementById('goal-name');
+      const targetEl = document.getElementById('goal-target');
+      const name = nameEl.value.trim();
+      const ok = validateFields([
+        [nameEl, name ? '' : 'Give the goal a name.'],
+        [targetEl, amountError(targetEl.value, 'Enter a target amount.')]
+      ]);
+      if(!ok) return;
+      const target = toCents(targetEl.value);
       clearFields(['goal-name', 'goal-target']);
       addGoal({ name, target });
     });
@@ -782,8 +822,9 @@ function attachPanelHandlers(t){
     btn.addEventListener('click', () => {
       const id = btn.dataset.contribute;
       const input = document.getElementById(`contrib-${id}`);
+      // The input sits in a flex row with its button, so the error goes after the row.
+      if(!validateFields([[input, amountError(input.value), input.closest('.goal-actions')]])) return;
       const amount = toCents(input.value);
-      if(!amount || amount <= 0) return;
       clearFields([`contrib-${id}`]);
       contributeToGoal(id, amount);
     });

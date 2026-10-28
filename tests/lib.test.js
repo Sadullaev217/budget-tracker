@@ -1,7 +1,7 @@
 // Run with: node --test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DATA_VERSION, toCents, fmt, localISO, escapeHtml, migrateData, sumTotals, sumDay, monthlyExpenseSeries } = require('../lib.js');
+const { DATA_VERSION, toCents, amountError, fmt, localISO, escapeHtml, migrateData, sumTotals, sumDay, monthlyExpenseSeries } = require('../lib.js');
 
 test('toCents converts dollar strings to integer cents', () => {
   assert.equal(toCents('12.34'), 1234);
@@ -9,6 +9,15 @@ test('toCents converts dollar strings to integer cents', () => {
   assert.equal(toCents('19.99'), 1999);
   assert.ok(Number.isNaN(toCents('')));
   assert.ok(Number.isNaN(toCents('abc')));
+});
+
+test('amountError explains empty, zero, negative and sub-cent input', () => {
+  assert.equal(amountError(''), 'Enter an amount.');
+  assert.equal(amountError('   ', 'Enter a target.'), 'Enter a target.');
+  assert.equal(amountError('0'), 'Enter an amount greater than 0.');
+  assert.equal(amountError('-5'), 'Enter an amount greater than 0.');
+  assert.equal(amountError('0.001'), 'Enter an amount greater than 0.');
+  assert.equal(amountError('12.50'), '');
 });
 
 test('fmt formats cents as dollars with sign', () => {
