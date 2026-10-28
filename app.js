@@ -92,6 +92,7 @@ function signOut(){
   authMode = 'signin';
   authError = '';
   backupStatus = { msg: '', isError: false };
+  hideToast();
   render();
 }
 
@@ -133,16 +134,73 @@ function addTransaction(data){
   save(); render();
 }
 function deleteTransaction(id){
-  state.transactions = state.transactions.filter(t => t.id !== id);
+  const idx = state.transactions.findIndex(t => t.id === id);
+  if(idx < 0) return;
+  const [item] = state.transactions.splice(idx, 1);
   save(); render();
+  showUndoToast(`Deleted "${item.note || item.category}".`, () => {
+    state.transactions.splice(Math.min(idx, state.transactions.length), 0, item);
+    save(); render();
+  });
 }
 function addGoal(data){
   state.goals.push({ id: uid(), saved: 0, ...data });
   save(); render();
 }
 function deleteGoal(id){
-  state.goals = state.goals.filter(g => g.id !== id);
+  const idx = state.goals.findIndex(g => g.id === id);
+  if(idx < 0) return;
+  const [goal] = state.goals.splice(idx, 1);
   save(); render();
+  showUndoToast(`Deleted goal "${goal.name}".`, () => {
+    state.goals.splice(Math.min(idx, state.goals.length), 0, goal);
+    save(); render();
+  });
+}
+
+// Undo toast. It lives outside #app so render() doesn't wipe it. It stays up
+// while it has keyboard focus, and is dismissed whenever the data is swapped
+// (sign-out, import) so Undo can't write into a different user's data.
+const TOAST_MS = 7000;
+let toastTimer = null;
+function showUndoToast(message, onUndo){
+  const region = document.getElementById('toast-region');
+  if(!region) return;
+  hideToast();
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  const text = document.createElement('span');
+  text.textContent = message;
+  const undo = document.createElement('button');
+  undo.type = 'button';
+  undo.className = 'toast-undo';
+  undo.textContent = 'Undo';
+  undo.addEventListener('click', () => { hideToast(); onUndo(); });
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'toast-close';
+  close.setAttribute('aria-label', 'Dismiss');
+  close.innerHTML = '<span aria-hidden="true">✕</span>';
+  close.addEventListener('click', hideToast);
+  toast.append(text, undo, close);
+  toast.addEventListener('focusin', () => clearTimeout(toastTimer));
+  toast.addEventListener('focusout', (e) => { if(!toast.contains(e.relatedTarget)) armToastTimer(); });
+  region.appendChild(toast);
+  armToastTimer();
+}
+function armToastTimer(){
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    const toast = document.querySelector('#toast-region .toast');
+    // Never yank the toast out from under keyboard focus; check again later.
+    if(toast && toast.contains(document.activeElement)) armToastTimer();
+    else hideToast();
+  }, TOAST_MS);
+}
+function hideToast(){
+  clearTimeout(toastTimer);
+  const region = document.getElementById('toast-region');
+  if(region) region.innerHTML = '';
 }
 function contributeToGoal(id, amount){
   const g = state.goals.find(g => g.id === id);
@@ -721,6 +779,7 @@ async function importBackupFile(file){
   data.transactions.forEach(t => { if(!t.id) t.id = uid(); });
   data.goals.forEach(g => { if(!g.id) g.id = uid(); });
   state = data;
+  hideToast();
   backupStatus = { msg: `Imported ${data.transactions.length} transactions and ${data.goals.length} goals.`, isError: false };
   save();
   render();
