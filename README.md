@@ -1,6 +1,6 @@
 # The Ledger — Budget Tracker
 
-A single-file budget tracker built with vanilla HTML, CSS and JavaScript. No build step, no dependencies, no backend.
+A budget tracker built with vanilla HTML, CSS and JavaScript. No build step, no dependencies, no backend.
 
 ## Features
 
@@ -13,7 +13,13 @@ A single-file budget tracker built with vanilla HTML, CSS and JavaScript. No bui
 
 ## Run it
 
-Open `budget-tracker.html` in a browser. Fonts load from Google Fonts, so an internet connection gives the intended look; everything else works offline.
+Open `index.html` in a browser. Fonts load from Google Fonts, so an internet connection gives the intended look; everything else works offline.
+
+## Project layout
+
+- `index.html`: page shell (plus a tiny inline script that applies the theme before first paint)
+- `style.css`: all styles; light and dark themes are CSS custom properties
+- `app.js`: app logic and rendering
 
 ## Data and privacy
 
