@@ -2,6 +2,10 @@
 
 A budget tracker built with vanilla HTML, CSS and JavaScript. No build step, no dependencies, no backend.
 
+**Live demo:** https://sadullaev217.github.io/budget-tracker/
+
+![Overview tab in dark mode: balance, income and expense tiles, spending by category and expenses by month](docs/screenshot.jpg)
+
 ## Features
 
 - **Overview**: balance, income and expense tiles in a bento grid, spending by category, and an expenses-by-month bar chart (hand-rolled SVG with hover and keyboard tooltips)
@@ -13,7 +17,7 @@ A budget tracker built with vanilla HTML, CSS and JavaScript. No build step, no 
 
 ## Run it
 
-Open `index.html` in a browser. Fonts load from Google Fonts, so an internet connection gives the intended look; everything else works offline.
+Use the live demo, or clone the repo and open `index.html` in a browser. Fonts load from Google Fonts, so an internet connection gives the intended look; everything else works offline.
 
 ## Project layout
 
