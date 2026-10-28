@@ -1,7 +1,7 @@
 // Run with: node --test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DATA_VERSION, CURRENCIES, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, sumTotals, sumDay, monthlyExpenseSeries } = require('../lib.js');
+const { DATA_VERSION, CURRENCIES, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, sumTotals, sumDay, monthlyExpenseSeries } = require('../lib.js');
 
 test('toCents converts dollar strings to integer cents', () => {
   assert.equal(toCents('12.34'), 1234);
@@ -139,4 +139,20 @@ test('transactionsToCSV quotes fields, sorts by date and defuses formulas', () =
 test('parseBackup keeps a valid currency setting and drops an unknown one', () => {
   assert.equal(parseBackup({ transactions: [], goals: [], settings: { currency: 'EUR' } }).data.settings.currency, 'EUR');
   assert.equal(parseBackup({ transactions: [], goals: [], settings: { currency: 'BTC' } }).data.settings.currency, undefined);
+});
+
+test('filterTransactions matches note/category text and type/category filters', () => {
+  const data = [
+    { id: 1, type: 'expense', category: 'Food', note: 'Groceries at Metro' },
+    { id: 2, type: 'expense', category: 'Transport', note: '' },
+    { id: 3, type: 'income', category: 'Salary', note: 'Paycheck' },
+    { id: 4, type: 'expense', category: 'Food', note: 'Lunch' }
+  ];
+  const ids = f => filterTransactions(data, f).map(t => t.id);
+  assert.deepEqual(ids({}), [1, 2, 3, 4]);
+  assert.deepEqual(ids({ query: 'metro' }), [1]);
+  assert.deepEqual(ids({ query: '  FOOD ' }), [1, 4]);          // category text, trimmed, case-insensitive
+  assert.deepEqual(ids({ type: 'income' }), [3]);
+  assert.deepEqual(ids({ category: 'Food', query: 'lunch' }), [4]);
+  assert.deepEqual(ids({ type: 'income', category: 'Food' }), []);
 });

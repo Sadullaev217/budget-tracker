@@ -133,6 +133,7 @@ function signOut(){
   authError = '';
   backupStatus = { msg: '', isError: false };
   editingId = null;
+  txFilter = { query: '', type: 'all', category: 'all' };
   hideToast();
   render();
 }
@@ -490,9 +491,14 @@ function attachAuthHandlers(){
 // render() rebuilds the DOM, which drops keyboard focus; remember which control
 // had it and put focus back afterwards.
 const FOCUS_ATTRS = ['data-tab','data-date','data-type','data-dtype','data-cal-nav','data-authmode','data-del','data-delgoal','data-contribute'];
+// Caret position in a focused text field, so typing in the search box
+// (which re-renders on every keystroke) doesn't jump the caret to the end.
+let savedSelection = null;
 function focusSelector(){
   const el = document.activeElement;
+  savedSelection = null;
   if(!el || el === document.body) return null;
+  try{ if(typeof el.selectionStart === 'number') savedSelection = [el.selectionStart, el.selectionEnd]; }catch(e){}
   if(el.id) return '#' + CSS.escape(el.id);
   if(el.hasAttribute('data-cal-today')) return '[data-cal-today]';
   for(const a of FOCUS_ATTRS){
@@ -504,10 +510,15 @@ function focusSelector(){
 // (e.g. back on the Edit button after saving); wins over restoreFocus.
 let pendingFocus = null;
 function restoreFocus(sel){
-  if(pendingFocus){ sel = pendingFocus; pendingFocus = null; }
+  let keepCaret = true;
+  if(pendingFocus){ sel = pendingFocus; pendingFocus = null; keepCaret = false; }
   if(!sel) return;
   const el = document.querySelector(sel);
-  if(el) el.focus({ preventScroll: true });
+  if(!el) return;
+  el.focus({ preventScroll: true });
+  if(keepCaret && savedSelection){
+    try{ el.setSelectionRange(savedSelection[0], savedSelection[1]); }catch(e){ /* not a text field */ }
+  }
 }
 
 // Same problem for typed-but-unsubmitted text: keep it across re-renders
@@ -791,24 +802,62 @@ function saveEdit(){
   stopEdit();
 }
 
+// Transactions-tab search and filters; kept while switching tabs, reset on sign-out.
+let txFilter = { query: '', type: 'all', category: 'all' };
+function isFiltering(){ return !!txFilter.query.trim() || txFilter.type !== 'all' || txFilter.category !== 'all'; }
+
 function renderTransactions(t){
   const cats = txType === 'income' ? INCOME_CATS : EXPENSE_CATS;
   const catOptions = cats.map(c => `<option value="${c}">${c}</option>`).join('');
 
   // Newest date first (stable sort keeps same-day entries in insertion order),
   // so month groups appear in date order even after back-dated or edited entries.
-  const sorted = state.transactions.slice().sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+  const filtered = filterTransactions(state.transactions, txFilter);
+  const filtering = isFiltering();
+  const sorted = filtered.slice().sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
   const grouped = {};
   sorted.forEach(tx => {
     const mk = monthKey(tx.date);
     grouped[mk] = grouped[mk] || [];
     grouped[mk].push(tx);
   });
+  const shownTotals = sumTotals(filtered);
 
+  const emptyMsg = !state.transactions.length
+    ? 'No entries yet. Log your first transaction above.'
+    : 'No entries match these filters.';
   const lines = Object.keys(grouped).length ? Object.entries(grouped).map(([month, txs]) => `
     <div class="ledger-month">${month}</div>
     ${txs.map(renderLedgerLine).join('')}
-  `).join('') : `<div class="empty">No entries yet. Log your first transaction above.</div>`;
+  `).join('') : `<div class="empty">${emptyMsg}</div>`;
+
+  const allCats = Array.from(new Set([...EXPENSE_CATS, ...INCOME_CATS, ...state.transactions.map(t => t.category)]));
+  const filterBar = state.transactions.length ? `
+    <div class="filter-bar" role="search" aria-label="Filter entries">
+      <div class="field filter-query">
+        <label for="filter-query">Search</label>
+        <input type="search" id="filter-query" placeholder="Note or category" value="${escapeHtml(txFilter.query)}" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="filter-type">Type</label>
+        <select id="filter-type">
+          <option value="all"${txFilter.type === 'all' ? ' selected' : ''}>All</option>
+          <option value="expense"${txFilter.type === 'expense' ? ' selected' : ''}>Expenses</option>
+          <option value="income"${txFilter.type === 'income' ? ' selected' : ''}>Income</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="filter-category">Category</label>
+        <select id="filter-category">
+          <option value="all">All</option>
+          ${allCats.map(c => `<option value="${escapeHtml(c)}"${txFilter.category === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="filter-summary">
+      <span id="filter-count">${filtering ? `Showing ${filtered.length} of ${state.transactions.length} entries` : `${state.transactions.length} entries`}</span>
+      ${filtering ? '<button type="button" class="link-btn" id="filter-clear">Clear filters</button>' : ''}
+    </div>` : '';
 
   return `
     <div class="card">
@@ -844,11 +893,12 @@ function renderTransactions(t){
     </div>
     <div class="card">
       <h2>Entries</h2>
+      ${filterBar}
       ${lines}
-      ${state.transactions.length ? `
+      ${filtered.length ? `
       <div class="total-line">
-        <span>Net</span>
-        <span>${fmt(t.balance)}</span>
+        <span>${filtering ? 'Net of shown entries' : 'Net'}</span>
+        <span>${fmt(shownTotals.balance)}</span>
       </div>` : ''}
     </div>
     <div class="card">
@@ -972,6 +1022,7 @@ function attachPanelHandlers(t){
   // Enter submits the card's primary button (these cards aren't <form>s)
   document.querySelectorAll('.card input, .goal-card input').forEach(inp => {
     if(inp.form) return;   // real <form>s (inline edit) submit on Enter natively
+    if(inp.type === 'search') return;   // the filter box has no submit action
     inp.addEventListener('keydown', (e) => {
       if(e.key !== 'Enter') return;
       e.preventDefault();
@@ -1056,6 +1107,21 @@ function attachPanelHandlers(t){
       addTransaction({ type: txType, amount, category, date, note });
     });
   }
+  // Search and filters
+  const filterQuery = document.getElementById('filter-query');
+  if(filterQuery){
+    filterQuery.addEventListener('input', () => { txFilter.query = filterQuery.value; render(); });
+    document.getElementById('filter-type').addEventListener('change', (e) => { txFilter.type = e.target.value; render(); });
+    document.getElementById('filter-category').addEventListener('change', (e) => { txFilter.category = e.target.value; render(); });
+    const clearBtn = document.getElementById('filter-clear');
+    if(clearBtn) clearBtn.addEventListener('click', () => {
+      txFilter = { query: '', type: 'all', category: 'all' };
+      clearFields(['filter-query', 'filter-type', 'filter-category']);   // else the draft restorer puts the old values back
+      pendingFocus = '#filter-query';
+      render();
+    });
+  }
+
   const currencySel = document.getElementById('currency-select');
   if(currencySel){
     currencySel.addEventListener('change', () => {

@@ -105,6 +105,16 @@ function transactionsToCSV(transactions){
   return rows.map(r => r.map(cell).join(',')).join('\r\n') + '\r\n';
 }
 
+// Case-insensitive text match on note and category, plus exact type/category filters.
+function filterTransactions(transactions, { query = '', type = 'all', category = 'all' } = {}){
+  const q = String(query).trim().toLowerCase();
+  return transactions.filter(t =>
+    (type === 'all' || t.type === type) &&
+    (category === 'all' || t.category === category) &&
+    (!q || String(t.note || '').toLowerCase().includes(q) || String(t.category || '').toLowerCase().includes(q))
+  );
+}
+
 function sumTotals(transactions){
   let income = 0, expense = 0;
   const byCategory = {};
@@ -152,5 +162,5 @@ function monthlyExpenseSeries(transactions, now, months = 6){
 }
 
 if(typeof module !== 'undefined' && module.exports){
-  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, sumTotals, sumDay, monthlyExpenseSeries };
+  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, sumTotals, sumDay, monthlyExpenseSeries };
 }

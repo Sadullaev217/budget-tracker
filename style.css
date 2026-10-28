@@ -330,6 +330,21 @@ input::placeholder{ color: var(--text-dimmer); }
 input[aria-invalid="true"]{ border-color: var(--expense-text); }
 
 .settings-field{ max-width: 260px; }
+
+/* Transactions search and filters */
+.filter-bar{ display:flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+.filter-bar .field{ flex: 1; min-width: 140px; }
+.filter-bar .filter-query{ flex: 2; min-width: 180px; }
+.filter-summary{
+  display:flex; align-items:center; justify-content: space-between; gap: 8px;
+  font-size: 0.82rem; color: var(--text-dim);
+  margin-bottom: 14px; min-height: 32px;
+}
+.link-btn{
+  background: none; border: none; padding: 6px 4px; min-height: 32px;
+  color: var(--focus); font: inherit; font-weight: 600; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+}
 .card-help{ color: var(--text-dim); font-size: 0.85rem; margin: -8px 0 14px; line-height: 1.5; }
 .backup-actions{ display:flex; flex-wrap: wrap; gap: 8px; }
 .backup-status{ font-size: 0.82rem; color: var(--text-dim); margin-top: 10px; min-height: 1.2em; }
