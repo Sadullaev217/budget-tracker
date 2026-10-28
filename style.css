@@ -710,3 +710,11 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
 .toast button:hover{ background: rgba(127,127,127,0.2); }
 .toast button:focus-visible{ outline-color: var(--bg); outline-offset: -2px; }
 @keyframes toast-in{ from{ opacity: 0; transform: translateY(8px); } to{ opacity: 1; transform: none; } }
+
+/* Category donut chart */
+.cat-chart-wrap{ display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center; }
+.cat-chart-svg{ width: 160px; height: 160px; flex-shrink: 0; }
+.chart-legend{ display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; }
+.chart-legend-item{ display: flex; align-items: center; gap: 6px; }
+.legend-dot{ width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-pct{ opacity: 0.6; margin-left: 4px; }

@@ -140,7 +140,7 @@ function signOut(){
   authError = '';
   backupStatus = { msg: '', isError: false };
   editingId = null;
-  txFilter = { query: '', type: 'all', category: 'all' };
+  txFilter = { query: '', type: 'all', category: 'all', dateFrom: '', dateTo: '' };
   hideToast();
   render();
 }
@@ -350,6 +350,37 @@ function renderChart(series){
       <div class="chart-tooltip" id="chart-tooltip"></div>
     </div>
   `;
+}
+
+function renderCategoryChart(byCategory){
+  const entries = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
+  if(!entries.length) return '<div class="empty">No expenses to chart yet.</div>';
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  const colors = ['#f87171','#60a5fa','#34d399','#fbbf24','#a78bfa','#fb923c','#f472b6','#38bdf8','#4ade80','#facc15'];
+  const R = 70, cx = 90, cy = 90;
+  let startAngle = -Math.PI / 2;
+  const slices = entries.map(([cat, amt], i) => {
+    const frac = amt / total;
+    const angle = frac * Math.PI * 2;
+    const endAngle = startAngle + angle;
+    const large = angle > Math.PI ? 1 : 0;
+    const x1 = cx + R * Math.cos(startAngle), y1 = cy + R * Math.sin(startAngle);
+    const x2 = cx + R * Math.cos(endAngle), y2 = cy + R * Math.sin(endAngle);
+    const color = colors[i % colors.length];
+    const path = entries.length === 1
+      ? `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${color}" opacity="0.85"/>`
+      : `<path d="M${cx},${cy} L${x1},${y1} A${R},${R} 0 ${large} 1 ${x2},${y2} Z" fill="${color}" opacity="0.85"/>`;
+    startAngle = endAngle;
+    return { path, cat, amt, pct: Math.round(frac * 100), color };
+  });
+  const legend = slices.map(s =>
+    `<div class="chart-legend-item"><span class="legend-dot" style="background:${s.color}"></span>${escapeHtml(s.cat)} <span class="legend-pct">${s.pct}%</span></div>`
+  ).join('');
+  return `
+    <div class="cat-chart-wrap">
+      <svg viewBox="0 0 180 180" class="cat-chart-svg">${slices.map(s => s.path).join('')}<circle cx="${cx}" cy="${cy}" r="40" fill="var(--card-bg)"/><text x="${cx}" y="${cy + 5}" text-anchor="middle" fill="var(--fg)" font-size="13" font-weight="600">${formatMoneyCompact(total, userCurrency())}</text></svg>
+      <div class="chart-legend">${legend}</div>
+    </div>`;
 }
 
 function renderDaily(){
@@ -722,6 +753,10 @@ function renderOverview(t){
       <div class="tile tile-chart">
         ${renderChart(chartSeries)}
       </div>
+      <div class="tile tile-cat-chart">
+        <h2>Expenses by category</h2>
+        ${renderCategoryChart(t.byCategory)}
+      </div>
       <div class="tile tile-goals">
         <h2>Savings goals</h2>
         ${goalsSummary}
@@ -832,8 +867,8 @@ function saveEdit(){
 }
 
 // Transactions-tab search and filters; kept while switching tabs, reset on sign-out.
-let txFilter = { query: '', type: 'all', category: 'all' };
-function isFiltering(){ return !!txFilter.query.trim() || txFilter.type !== 'all' || txFilter.category !== 'all'; }
+let txFilter = { query: '', type: 'all', category: 'all', dateFrom: '', dateTo: '' };
+function isFiltering(){ return !!txFilter.query.trim() || txFilter.type !== 'all' || txFilter.category !== 'all' || !!txFilter.dateFrom || !!txFilter.dateTo; }
 
 function renderTransactions(t){
   const cats = txType === 'income' ? incomeCats() : expenseCats();
@@ -882,6 +917,14 @@ function renderTransactions(t){
           <option value="all">All</option>
           ${allCats.map(c => `<option value="${escapeHtml(c)}"${txFilter.category === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
         </select>
+      </div>
+      <div class="field">
+        <label for="filter-date-from">From</label>
+        <input type="date" id="filter-date-from" value="${txFilter.dateFrom}">
+      </div>
+      <div class="field">
+        <label for="filter-date-to">To</label>
+        <input type="date" id="filter-date-to" value="${txFilter.dateTo}">
       </div>
     </div>
     <div class="filter-summary">
@@ -1228,10 +1271,14 @@ function attachPanelHandlers(t){
     filterQuery.addEventListener('input', () => { txFilter.query = filterQuery.value; render(); });
     document.getElementById('filter-type').addEventListener('change', (e) => { txFilter.type = e.target.value; render(); });
     document.getElementById('filter-category').addEventListener('change', (e) => { txFilter.category = e.target.value; render(); });
+    const dateFromEl = document.getElementById('filter-date-from');
+    const dateToEl = document.getElementById('filter-date-to');
+    if(dateFromEl) dateFromEl.addEventListener('change', (e) => { txFilter.dateFrom = e.target.value; render(); });
+    if(dateToEl) dateToEl.addEventListener('change', (e) => { txFilter.dateTo = e.target.value; render(); });
     const clearBtn = document.getElementById('filter-clear');
     if(clearBtn) clearBtn.addEventListener('click', () => {
-      txFilter = { query: '', type: 'all', category: 'all' };
-      clearFields(['filter-query', 'filter-type', 'filter-category']);   // else the draft restorer puts the old values back
+      txFilter = { query: '', type: 'all', category: 'all', dateFrom: '', dateTo: '' };
+      clearFields(['filter-query', 'filter-type', 'filter-category', 'filter-date-from', 'filter-date-to']);
       pendingFocus = '#filter-query';
       render();
     });

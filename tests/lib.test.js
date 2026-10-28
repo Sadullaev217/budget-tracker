@@ -157,6 +157,20 @@ test('filterTransactions matches note/category text and type/category filters', 
   assert.deepEqual(ids({ type: 'income', category: 'Food' }), []);
 });
 
+test('filterTransactions supports date-range filtering', () => {
+  const data = [
+    { id: 1, type: 'expense', category: 'Food', note: '', date: '2026-10-01' },
+    { id: 2, type: 'expense', category: 'Food', note: '', date: '2026-10-15' },
+    { id: 3, type: 'expense', category: 'Food', note: '', date: '2026-10-31' },
+    { id: 4, type: 'expense', category: 'Food', note: '', date: '2026-09-15' }
+  ];
+  const ids = f => filterTransactions(data, f).map(t => t.id);
+  assert.deepEqual(ids({ dateFrom: '2026-10-01', dateTo: '2026-10-31' }), [1, 2, 3]);
+  assert.deepEqual(ids({ dateFrom: '2026-10-10' }), [2, 3]);
+  assert.deepEqual(ids({ dateTo: '2026-10-01' }), [1, 4]);
+  assert.deepEqual(ids({ dateFrom: '2026-10-15', dateTo: '2026-10-15' }), [2]);
+});
+
 test('currentMonthByCategory sums only current-month expenses per category', () => {
   const data = [
     { type: 'expense', amount: 1000, category: 'Food', date: '2026-10-05' },
