@@ -1,7 +1,7 @@
 // Run with: node --test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DATA_VERSION, toCents, amountError, fmt, localISO, escapeHtml, migrateData, sumTotals, sumDay, monthlyExpenseSeries } = require('../lib.js');
+const { DATA_VERSION, toCents, amountError, fmt, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, sumTotals, sumDay, monthlyExpenseSeries } = require('../lib.js');
 
 test('toCents converts dollar strings to integer cents', () => {
   assert.equal(toCents('12.34'), 1234);
@@ -89,4 +89,37 @@ test('monthlyExpenseSeries labels include the year when the window spans two yea
   assert.equal(s[0].key, '2026-09');
   assert.equal(s[5].key, '2027-02');
   assert.match(s[0].label, /26/);
+});
+
+test('parseBackup accepts a valid v2 backup and normalises fields', () => {
+  const { data, error } = parseBackup({ v: 2, transactions: [{ id: 'a', type: 'expense', amount: 1999, category: 'Food', date: '2026-10-01', note: 'Lunch' }], goals: [{ id: 'g', name: 'Car', target: 10000, saved: 500 }] });
+  assert.equal(error, undefined);
+  assert.equal(data.v, DATA_VERSION);
+  assert.equal(data.transactions[0].amount, 1999);
+  assert.equal(data.goals[0].name, 'Car');
+});
+
+test('parseBackup migrates a v1 (dollar) backup', () => {
+  const { data } = parseBackup({ transactions: [{ type: 'income', amount: 12.5, category: 'Gift', date: '2026-01-02' }], goals: [] });
+  assert.equal(data.transactions[0].amount, 1250);
+});
+
+test('parseBackup rejects files that are not backups', () => {
+  assert.match(parseBackup(null).error, /not a Ledger backup/);
+  assert.match(parseBackup([]).error, /not a Ledger backup/);
+  assert.match(parseBackup({ foo: 1 }).error, /no transactions or goals/);
+  assert.match(parseBackup({ v: 99, transactions: [], goals: [] }).error, /newer version/);
+  assert.match(parseBackup({ transactions: [{ type: 'expense', amount: 5, date: 'yesterday' }], goals: [] }).error, /Transaction 1/);
+  assert.match(parseBackup({ transactions: [], goals: [{ name: 'x', target: 'lots', saved: 0 }] }).error, /Goal 1/);
+});
+
+test('transactionsToCSV quotes fields, sorts by date and defuses formulas', () => {
+  const csv = transactionsToCSV([
+    { date: '2026-10-02', type: 'expense', category: 'Food', amount: 1999, note: 'Lunch, "big"' },
+    { date: '2026-10-01', type: 'income', category: 'Gift', amount: 5000, note: '=HYPERLINK("x")' }
+  ]);
+  const lines = csv.trim().split('\r\n');
+  assert.equal(lines[0], '"date","type","category","amount","note"');
+  assert.equal(lines[1], '"2026-10-01","income","Gift","50.00","\'=HYPERLINK(""x"")"');
+  assert.equal(lines[2], '"2026-10-02","expense","Food","19.99","Lunch, ""big"""');
 });

@@ -328,6 +328,11 @@ input, select{
 input:focus, select:focus{ border-color: var(--focus); background: var(--surface); }
 input::placeholder{ color: var(--text-dimmer); }
 input[aria-invalid="true"]{ border-color: var(--expense-text); }
+
+.card-help{ color: var(--text-dim); font-size: 0.85rem; margin: -8px 0 14px; line-height: 1.5; }
+.backup-actions{ display:flex; flex-wrap: wrap; gap: 8px; }
+.backup-status{ font-size: 0.82rem; color: var(--text-dim); margin-top: 10px; min-height: 1.2em; }
+.backup-status.error{ color: var(--expense-text); }
 .field-error{
   color: var(--expense-text);
   font-size: 0.8rem;

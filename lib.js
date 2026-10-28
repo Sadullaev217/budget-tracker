@@ -49,6 +49,44 @@ function migrateData(data){
   return { data: out, changed: true };
 }
 
+// Validate a parsed backup file. Returns { data } (migrated to the current
+// version) or { error } with a message suitable for showing to the user.
+function parseBackup(obj){
+  if(!obj || typeof obj !== 'object' || Array.isArray(obj)) return { error: 'That file is not a Ledger backup.' };
+  if(!Array.isArray(obj.transactions) || !Array.isArray(obj.goals)) return { error: 'That file is not a Ledger backup (no transactions or goals list).' };
+  if(typeof obj.v === 'number' && obj.v > DATA_VERSION) return { error: 'This backup was made by a newer version of the app.' };
+  const okTx = t => t && typeof t === 'object' && (t.type === 'income' || t.type === 'expense')
+    && /^\d{4}-\d{2}-\d{2}$/.test(String(t.date)) && Number.isFinite(Number(t.amount));
+  const okGoal = g => g && typeof g === 'object' && typeof g.name === 'string'
+    && Number.isFinite(Number(g.target)) && Number.isFinite(Number(g.saved));
+  const badTx = obj.transactions.findIndex(t => !okTx(t));
+  if(badTx >= 0) return { error: `Transaction ${badTx + 1} in the file is invalid.` };
+  const badGoal = obj.goals.findIndex(g => !okGoal(g));
+  if(badGoal >= 0) return { error: `Goal ${badGoal + 1} in the file is invalid.` };
+  const { data } = migrateData(obj);
+  data.transactions = data.transactions.map(t => ({
+    id: String(t.id || ''), type: t.type, amount: Math.round(Number(t.amount)),
+    category: String(t.category || 'Other'), date: String(t.date), note: String(t.note || '')
+  }));
+  data.goals = data.goals.map(g => ({ id: String(g.id || ''), name: g.name, target: Math.round(Number(g.target)), saved: Math.round(Number(g.saved)) }));
+  return { data: { v: DATA_VERSION, transactions: data.transactions, goals: data.goals } };
+}
+
+// CSV of transactions with amounts in dollars. Fields are quoted, and cells
+// starting with = + - @ are prefixed with ' so spreadsheets don't run them as formulas.
+function transactionsToCSV(transactions){
+  const cell = v => {
+    let s = String(v);
+    if(/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return '"' + s.replace(/"/g, '""') + '"';
+  };
+  const rows = [['date', 'type', 'category', 'amount', 'note']];
+  transactions.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0).forEach(t => {
+    rows.push([t.date, t.type, t.category, (t.amount / 100).toFixed(2), t.note || '']);
+  });
+  return rows.map(r => r.map(cell).join(',')).join('\r\n') + '\r\n';
+}
+
 function sumTotals(transactions){
   let income = 0, expense = 0;
   const byCategory = {};
@@ -96,5 +134,5 @@ function monthlyExpenseSeries(transactions, now, months = 6){
 }
 
 if(typeof module !== 'undefined' && module.exports){
-  module.exports = { DATA_VERSION, toCents, amountError, fmt, localISO, escapeHtml, migrateData, sumTotals, sumDay, monthlyExpenseSeries };
+  module.exports = { DATA_VERSION, toCents, amountError, fmt, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, sumTotals, sumDay, monthlyExpenseSeries };
 }

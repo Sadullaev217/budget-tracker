@@ -91,6 +91,7 @@ function signOut(){
   activeTab = 'overview';
   authMode = 'signin';
   authError = '';
+  backupStatus = { msg: '', isError: false };
   render();
 }
 
@@ -662,7 +663,67 @@ function renderTransactions(t){
         <span>${fmt(t.balance)}</span>
       </div>` : ''}
     </div>
+    <div class="card">
+      <h2>Backup</h2>
+      <p class="card-help">Your data lives only in this browser. Export a backup so clearing browser data can't wipe it.</p>
+      <div class="backup-actions">
+        <button type="button" class="btn ghost" id="export-json-btn">Export backup (JSON)</button>
+        <button type="button" class="btn ghost" id="export-csv-btn">Export transactions (CSV)</button>
+        <button type="button" class="btn ghost" id="import-json-btn">Import backup</button>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+      </div>
+      <div class="backup-status" id="backup-status" role="status" aria-live="polite">${escapeHtml(backupStatus.msg)}</div>
+    </div>
   `;
+}
+
+// Last export/import outcome, shown under the Backup buttons.
+let backupStatus = { msg: '', isError: false };
+
+function downloadFile(filename, text, type){
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function backupFilename(ext){
+  const safeUser = String(currentUser).replace(/[^a-z0-9_-]+/gi, '-').slice(0, 40) || 'user';
+  return `ledger-${safeUser}-${todayISO()}.${ext}`;
+}
+function setBackupStatus(msg, isError){
+  backupStatus = { msg, isError };
+  const el = document.getElementById('backup-status');
+  if(el){ el.textContent = msg; el.classList.toggle('error', isError); }
+}
+
+async function importBackupFile(file){
+  let parsed;
+  try{
+    parsed = JSON.parse(await file.text());
+  }catch(e){
+    setBackupStatus('That file is not valid JSON.', true);
+    return;
+  }
+  const { data, error } = parseBackup(parsed);
+  if(error){ setBackupStatus(error, true); return; }
+  const hasData = state.transactions.length || state.goals.length;
+  if(hasData && !window.confirm(
+    `Replace your current ${state.transactions.length} transactions and ${state.goals.length} goals ` +
+    `with the ${data.transactions.length} transactions and ${data.goals.length} goals in this file? This can't be undone.`
+  )){
+    setBackupStatus('Import cancelled.', false);
+    return;
+  }
+  data.transactions.forEach(t => { if(!t.id) t.id = uid(); });
+  data.goals.forEach(g => { if(!g.id) g.id = uid(); });
+  state = data;
+  backupStatus = { msg: `Imported ${data.transactions.length} transactions and ${data.goals.length} goals.`, isError: false };
+  save();
+  render();
 }
 
 function renderGoals(){
@@ -794,6 +855,26 @@ function attachPanelHandlers(t){
       addTransaction({ type: txType, amount, category, date, note });
     });
   }
+  const exportJsonBtn = document.getElementById('export-json-btn');
+  if(exportJsonBtn){
+    exportJsonBtn.addEventListener('click', () => {
+      downloadFile(backupFilename('json'), JSON.stringify({ ...state, v: DATA_VERSION, exportedAt: new Date().toISOString() }, null, 2), 'application/json');
+      setBackupStatus(`Exported ${state.transactions.length} transactions and ${state.goals.length} goals.`, false);
+    });
+    document.getElementById('export-csv-btn').addEventListener('click', () => {
+      downloadFile(backupFilename('csv'), transactionsToCSV(state.transactions), 'text/csv');
+      setBackupStatus(`Exported ${state.transactions.length} transactions as CSV.`, false);
+    });
+    const fileInput = document.getElementById('import-file');
+    document.getElementById('import-json-btn').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if(file) importBackupFile(file);
+    });
+    document.getElementById('backup-status').classList.toggle('error', backupStatus.isError);
+  }
+
   document.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', () => deleteTransaction(btn.dataset.del));
   });
