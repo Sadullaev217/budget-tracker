@@ -669,7 +669,7 @@ function render(){
   `;
 
   document.querySelectorAll('.tab').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ activeTab = btn.dataset.tab; editingId = null; render(); });
+    btn.addEventListener('click', ()=>{ activeTab = btn.dataset.tab; editingId = null; pendingFocus = '#panels h2, #panels .card'; render(); });
   });
   const themeBtn = document.getElementById('theme-toggle');
   if(themeBtn) themeBtn.addEventListener('click', toggleTheme);
@@ -722,10 +722,12 @@ function renderOverview(t){
   }).join('') : `<div class="empty">No expenses logged yet. Add one from the Transactions tab.</div>`;
 
   const goalsSummary = state.goals.length ? state.goals.map(g => {
-    const pct = g.target > 0 ? Math.min(100, Math.round((g.saved / g.target)*100)) : 0;
+    const autoContrib = g.linkedCategory ? state.transactions.filter(tx => tx.type === 'income' && tx.category === g.linkedCategory).reduce((s, tx) => s + tx.amount, 0) : 0;
+    const totalSaved = g.saved + autoContrib;
+    const pct = g.target > 0 ? Math.min(100, Math.round((totalSaved / g.target)*100)) : 0;
     return `
       <div class="cat-row">
-        <div class="cat-top"><span>${escapeHtml(g.name)}</span><span class="amt">${fmt(g.saved)} / ${fmt(g.target)} (${pct}%)</span></div>
+        <div class="cat-top"><span>${escapeHtml(g.name)}</span><span class="amt">${fmt(totalSaved)} / ${fmt(g.target)} (${pct}%)</span></div>
         <div class="bar-track"><div class="bar-fill gold" style="width:${pct}%"></div></div>
       </div>`;
   }).join('') : `<div class="empty">No savings goals yet. Set one from the Savings Goals tab.</div>`;
@@ -927,7 +929,7 @@ function renderTransactions(t){
         <input type="date" id="filter-date-to" value="${txFilter.dateTo}">
       </div>
     </div>
-    <div class="filter-summary">
+    <div class="filter-summary" role="status" aria-live="polite">
       <span id="filter-count">${filtering ? `Showing ${filtered.length} of ${state.transactions.length} entries` : `${state.transactions.length} entries`}</span>
       ${filtering ? '<button type="button" class="link-btn" id="filter-clear">Clear filters</button>' : ''}
     </div>` : '';
@@ -1135,16 +1137,19 @@ async function importBackupFile(file){
 
 function renderGoals(){
   const goalCards = state.goals.length ? state.goals.map(g => {
-    const pct = g.target > 0 ? Math.min(100, Math.round((g.saved / g.target)*100)) : 0;
+    const autoContrib = g.linkedCategory ? state.transactions.filter(t => t.type === 'income' && t.category === g.linkedCategory).reduce((s, t) => s + t.amount, 0) : 0;
+    const totalSaved = g.saved + autoContrib;
+    const pct = g.target > 0 ? Math.min(100, Math.round((totalSaved / g.target)*100)) : 0;
     return `
       <div class="goal-card">
         <div class="goal-top">
           <span class="goal-name">${escapeHtml(g.name)}</span>
           <button class="del" data-delgoal="${g.id}" aria-label="Delete goal ${escapeHtml(g.name)}"><span aria-hidden="true">✕</span></button>
         </div>
-        <div class="goal-nums">${fmt(g.saved)} <span class="target">of ${fmt(g.target)}</span></div>
+        <div class="goal-nums">${fmt(totalSaved)} <span class="target">of ${fmt(g.target)}</span></div>
         <div class="bar-track" style="margin-top:10px;"><div class="bar-fill gold" style="width:${pct}%"></div></div>
         <div class="goal-pct">${pct}% funded</div>
+        ${g.linkedCategory ? `<div class="goal-linked">Tracking income from: ${escapeHtml(g.linkedCategory)}${autoContrib ? ` (${fmt(autoContrib)} auto)` : ''}</div>` : ''}
         <div class="goal-actions">
           <input type="number" min="0" step="0.01" placeholder="Amount" inputmode="decimal" id="contrib-${g.id}" aria-label="Amount to add to ${escapeHtml(g.name)}">
           <button class="btn ghost" data-contribute="${g.id}">Add funds</button>
@@ -1168,6 +1173,13 @@ function renderGoals(){
         <div class="field">
           <label for="goal-target">Target amount</label>
           <input type="number" min="0" step="0.01" id="goal-target" placeholder="0.00" inputmode="decimal">
+        </div>
+        <div class="field">
+          <label for="goal-link-cat">Track income from</label>
+          <select id="goal-link-cat">
+            <option value="">None (manual only)</option>
+            ${incomeCats().map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+          </select>
         </div>
       </div>
       <button class="btn" id="add-goal-btn">Create goal</button>
@@ -1230,6 +1242,19 @@ function attachPanelHandlers(t){
   if(calTodayBtn) calTodayBtn.addEventListener('click', goToToday);
   document.querySelectorAll('.day-cell[data-date]').forEach(btn => {
     btn.addEventListener('click', () => { selectedDate = btn.dataset.date; render(); });
+    btn.addEventListener('keydown', (e) => {
+      const days = Array.from(document.querySelectorAll('.day-cell[data-date]'));
+      const idx = days.indexOf(btn);
+      let target = null;
+      if(e.key === 'ArrowRight') target = days[idx + 1];
+      else if(e.key === 'ArrowLeft') target = days[idx - 1];
+      else if(e.key === 'ArrowDown') target = days[idx + 7];
+      else if(e.key === 'ArrowUp') target = days[idx - 7];
+      else if(e.key === 'Enter' || e.key === ' '){ selectedDate = btn.dataset.date; render(); e.preventDefault(); return; }
+      else if(e.key === 'Escape'){ btn.blur(); e.preventDefault(); return; }
+      else return;
+      if(target){ e.preventDefault(); target.focus(); }
+    });
   });
   document.querySelectorAll('.toggle-btn[data-dtype]').forEach(btn => {
     btn.addEventListener('click', () => { dailyType = btn.dataset.dtype; render(); });
@@ -1444,8 +1469,10 @@ function attachPanelHandlers(t){
       ]);
       if(!ok) return;
       const target = toCents(targetEl.value);
-      clearFields(['goal-name', 'goal-target']);
-      addGoal({ name, target });
+      const linkCatEl = document.getElementById('goal-link-cat');
+      const linkedCategory = linkCatEl ? linkCatEl.value : '';
+      clearFields(['goal-name', 'goal-target', 'goal-link-cat']);
+      addGoal({ name, target, ...(linkedCategory ? { linkedCategory } : {}) });
     });
   }
   document.querySelectorAll('[data-delgoal]').forEach(btn => {

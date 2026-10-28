@@ -718,3 +718,6 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
 .chart-legend-item{ display: flex; align-items: center; gap: 6px; }
 .legend-dot{ width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .legend-pct{ opacity: 0.6; margin-left: 4px; }
+
+/* Goal linked category */
+.goal-linked{ font-size: 0.78rem; opacity: 0.65; margin-top: 4px; }
