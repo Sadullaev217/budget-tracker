@@ -34,6 +34,13 @@ const MOON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 
 function uid(){ return Math.random().toString(36).slice(2,10); }
 
+function userCurrency(){
+  const c = state.settings && state.settings.currency;
+  return CURRENCIES.includes(c) ? c : DEFAULT_CURRENCY;
+}
+// All on-screen money goes through here so the currency setting applies everywhere.
+function fmt(cents){ return formatMoney(cents, userCurrency()); }
+
 async function hashPassword(pw){
   if(window.crypto && window.crypto.subtle){
     try{
@@ -258,7 +265,7 @@ function renderChart(series){
   const barW = Math.min(28, slot * 0.5);
   const baselineY = H - padBottom;
   const compact = slot < 72;
-  const shortAmt = cents => { const v = cents / 100; return v >= 1000 ? '$' + (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : '$' + Math.round(v); };
+  const shortAmt = cents => formatMoneyCompact(cents, userCurrency());
 
   const bars = series.map((s, i) => {
     const cx = padSide + slot * i + slot / 2;
@@ -812,6 +819,15 @@ function renderTransactions(t){
       </div>` : ''}
     </div>
     <div class="card">
+      <h2>Settings</h2>
+      <div class="field settings-field">
+        <label for="currency-select">Currency</label>
+        <select id="currency-select">
+          ${CURRENCIES.map(c => `<option value="${c}"${c === userCurrency() ? ' selected' : ''}>${c} (${formatMoney(123456, c)})</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="card">
       <h2>Backup</h2>
       <p class="card-help">Your data lives only in this browser. Export a backup so clearing browser data can't wipe it.</p>
       <div class="backup-actions">
@@ -866,6 +882,7 @@ async function importBackupFile(file){
     setBackupStatus('Import cancelled.', false);
     return;
   }
+  if(!data.settings.currency && state.settings && state.settings.currency) data.settings.currency = state.settings.currency;
   data.transactions.forEach(t => { if(!t.id) t.id = uid(); });
   data.goals.forEach(g => { if(!g.id) g.id = uid(); });
   state = data;
@@ -1006,6 +1023,14 @@ function attachPanelHandlers(t){
       addTransaction({ type: txType, amount, category, date, note });
     });
   }
+  const currencySel = document.getElementById('currency-select');
+  if(currencySel){
+    currencySel.addEventListener('change', () => {
+      state.settings = { ...(state.settings || {}), currency: currencySel.value };
+      save(); render();
+    });
+  }
+
   const exportJsonBtn = document.getElementById('export-json-btn');
   if(exportJsonBtn){
     exportJsonBtn.addEventListener('click', () => {

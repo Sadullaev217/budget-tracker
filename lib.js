@@ -17,10 +17,26 @@ function amountError(raw, emptyMsg = 'Enter an amount.'){
   return Number.isFinite(cents) && cents > 0 ? '' : 'Enter an amount greater than 0.';
 }
 
-function fmt(cents){
-  const neg = cents < 0;
-  const v = (Math.abs(cents) / 100).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-  return (neg ? '-' : '') + '$' + v;
+// Amounts are stored in cents, so only currencies with 2 minor digits are offered.
+const CURRENCIES = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'INR', 'UZS'];
+const DEFAULT_CURRENCY = 'USD';
+
+const moneyFormatters = new Map();
+function moneyFormatter(currency, locale, compact){
+  const key = `${currency}|${locale || ''}|${compact ? 'c' : ''}`;
+  if(!moneyFormatters.has(key)){
+    moneyFormatters.set(key, new Intl.NumberFormat(locale, compact
+      ? { style: 'currency', currency, currencyDisplay: 'narrowSymbol', notation: 'compact', minimumFractionDigits: 0, maximumFractionDigits: 1 }
+      : { style: 'currency', currency, currencyDisplay: 'narrowSymbol', minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  }
+  return moneyFormatters.get(key);
+}
+function formatMoney(cents, currency = DEFAULT_CURRENCY, locale){
+  return moneyFormatter(currency, locale, false).format(cents / 100);
+}
+// Short form for tight spaces like chart labels: $2.2K, €950.
+function formatMoneyCompact(cents, currency = DEFAULT_CURRENCY, locale){
+  return moneyFormatter(currency, locale, true).format(cents / 100);
 }
 
 // Local calendar date as YYYY-MM-DD. (toISOString() is UTC, which flips to
@@ -64,12 +80,14 @@ function parseBackup(obj){
   const badGoal = obj.goals.findIndex(g => !okGoal(g));
   if(badGoal >= 0) return { error: `Goal ${badGoal + 1} in the file is invalid.` };
   const { data } = migrateData(obj);
+  const settings = {};
+  if(obj.settings && CURRENCIES.includes(obj.settings.currency)) settings.currency = obj.settings.currency;
   data.transactions = data.transactions.map(t => ({
     id: String(t.id || ''), type: t.type, amount: Math.round(Number(t.amount)),
     category: String(t.category || 'Other'), date: String(t.date), note: String(t.note || '')
   }));
   data.goals = data.goals.map(g => ({ id: String(g.id || ''), name: g.name, target: Math.round(Number(g.target)), saved: Math.round(Number(g.saved)) }));
-  return { data: { v: DATA_VERSION, transactions: data.transactions, goals: data.goals } };
+  return { data: { v: DATA_VERSION, transactions: data.transactions, goals: data.goals, settings } };
 }
 
 // CSV of transactions with amounts in dollars. Fields are quoted, and cells
@@ -134,5 +152,5 @@ function monthlyExpenseSeries(transactions, now, months = 6){
 }
 
 if(typeof module !== 'undefined' && module.exports){
-  module.exports = { DATA_VERSION, toCents, amountError, fmt, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, sumTotals, sumDay, monthlyExpenseSeries };
+  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, sumTotals, sumDay, monthlyExpenseSeries };
 }

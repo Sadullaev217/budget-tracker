@@ -1,7 +1,7 @@
 // Run with: node --test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DATA_VERSION, toCents, amountError, fmt, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, sumTotals, sumDay, monthlyExpenseSeries } = require('../lib.js');
+const { DATA_VERSION, CURRENCIES, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, sumTotals, sumDay, monthlyExpenseSeries } = require('../lib.js');
 
 test('toCents converts dollar strings to integer cents', () => {
   assert.equal(toCents('12.34'), 1234);
@@ -20,10 +20,22 @@ test('amountError explains empty, zero, negative and sub-cent input', () => {
   assert.equal(amountError('12.50'), '');
 });
 
-test('fmt formats cents as dollars with sign', () => {
-  assert.equal(fmt(1230), '$12.30');
-  assert.equal(fmt(-5), '-$0.05');
-  assert.equal(fmt(0), '$0.00');
+test('formatMoney formats cents with sign and currency', () => {
+  assert.equal(formatMoney(1230, 'USD', 'en-US'), '$12.30');
+  assert.equal(formatMoney(-5, 'USD', 'en-US'), '-$0.05');
+  assert.equal(formatMoney(0, 'USD', 'en-US'), '$0.00');
+  assert.equal(formatMoney(123456, 'USD', 'en-US'), '$1,234.56');
+  assert.equal(formatMoney(1230, 'EUR', 'en-US'), '€12.30');
+  assert.equal(formatMoney(1230, 'CAD', 'en-CA'), '$12.30');   // narrow symbol: not "CA$" or "US$"
+});
+
+test('formatMoneyCompact shortens large amounts', () => {
+  assert.equal(formatMoneyCompact(17500, 'USD', 'en-US'), '$175');
+  assert.equal(formatMoneyCompact(215075, 'USD', 'en-US'), '$2.2K');
+});
+
+test('every offered currency formats with exactly 2 decimals', () => {
+  for (const c of CURRENCIES) assert.match(formatMoney(1999, c, 'en-US'), /19\.99/, c);
 });
 
 test('localISO uses the local calendar date, not UTC', () => {
@@ -122,4 +134,9 @@ test('transactionsToCSV quotes fields, sorts by date and defuses formulas', () =
   assert.equal(lines[0], '"date","type","category","amount","note"');
   assert.equal(lines[1], '"2026-10-01","income","Gift","50.00","\'=HYPERLINK(""x"")"');
   assert.equal(lines[2], '"2026-10-02","expense","Food","19.99","Lunch, ""big"""');
+});
+
+test('parseBackup keeps a valid currency setting and drops an unknown one', () => {
+  assert.equal(parseBackup({ transactions: [], goals: [], settings: { currency: 'EUR' } }).data.settings.currency, 'EUR');
+  assert.equal(parseBackup({ transactions: [], goals: [], settings: { currency: 'BTC' } }).data.settings.currency, undefined);
 });

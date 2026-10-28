@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <div class="app" id="app">
@@ -27,7 +27,8 @@
 
 <div class="toast-region" id="toast-region" role="status" aria-live="polite"></div>
 
-<script src="lib.js"></script>
-<script src="app.js"></script>
+<!-- ?v= keeps lib.js and app.js in step after a deploy (Pages caches assets for 10 min). Bump on release. -->
+<script src="lib.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
