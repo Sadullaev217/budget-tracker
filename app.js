@@ -136,7 +136,7 @@ async function signUp(username, password, confirm){
 function signOut(){
   currentUser = null;
   localStorage.removeItem(SESSION_KEY);
-  state = { transactions: [], goals: [] };
+  state = { transactions: [], goals: [], recurring: [], recurringGenerated: {} };
   activeTab = 'overview';
   authMode = 'signin';
   authError = '';

@@ -82,12 +82,17 @@ function parseBackup(obj){
   const { data } = migrateData(obj);
   const settings = {};
   if(obj.settings && CURRENCIES.includes(obj.settings.currency)) settings.currency = obj.settings.currency;
+  if(obj.settings && typeof obj.settings.budgets === 'object' && !Array.isArray(obj.settings.budgets)) settings.budgets = obj.settings.budgets;
+  if(obj.settings && Array.isArray(obj.settings.customExpenseCats)) settings.customExpenseCats = obj.settings.customExpenseCats.map(String);
+  if(obj.settings && Array.isArray(obj.settings.customIncomeCats)) settings.customIncomeCats = obj.settings.customIncomeCats.map(String);
   data.transactions = data.transactions.map(t => ({
     id: String(t.id || ''), type: t.type, amount: Math.round(Number(t.amount)),
     category: String(t.category || 'Other'), date: String(t.date), note: String(t.note || '')
   }));
   data.goals = data.goals.map(g => ({ id: String(g.id || ''), name: g.name, target: Math.round(Number(g.target)), saved: Math.round(Number(g.saved)) }));
-  return { data: { v: DATA_VERSION, transactions: data.transactions, goals: data.goals, settings } };
+  const recurring = Array.isArray(data.recurring) ? data.recurring : [];
+  const recurringGenerated = (data.recurringGenerated && typeof data.recurringGenerated === 'object' && !Array.isArray(data.recurringGenerated)) ? data.recurringGenerated : {};
+  return { data: { v: DATA_VERSION, transactions: data.transactions, goals: data.goals, settings, recurring, recurringGenerated } };
 }
 
 // CSV of transactions with amounts in dollars. Fields are quoted, and cells

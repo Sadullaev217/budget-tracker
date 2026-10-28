@@ -168,3 +168,27 @@ test('currentMonthByCategory sums only current-month expenses per category', () 
   const result = currentMonthByCategory(data, new Date(2026, 9, 20));   // Oct 2026
   assert.deepEqual(result, { Food: 3000, Transport: 500 });
 });
+
+test('parseBackup round-trip preserves recurring, budgets, and custom categories', () => {
+  const backup = {
+    v: DATA_VERSION,
+    transactions: [{ id: 't1', type: 'expense', amount: 500, category: 'Food', date: '2026-10-01', note: '' }],
+    goals: [{ id: 'g1', name: 'Car', target: 100000, saved: 5000 }],
+    recurring: [{ id: 'r1', type: 'expense', amount: 2000, category: 'Rent', day: 1, note: 'Monthly rent' }],
+    recurringGenerated: { '2026-10': true },
+    settings: {
+      currency: 'EUR',
+      budgets: { Food: 50000, Transport: 20000 },
+      customExpenseCats: ['Pets', 'Gym'],
+      customIncomeCats: ['Freelance']
+    }
+  };
+  const { data, error } = parseBackup(backup);
+  assert.equal(error, undefined);
+  assert.deepEqual(data.recurring, backup.recurring);
+  assert.deepEqual(data.recurringGenerated, backup.recurringGenerated);
+  assert.equal(data.settings.currency, 'EUR');
+  assert.deepEqual(data.settings.budgets, { Food: 50000, Transport: 20000 });
+  assert.deepEqual(data.settings.customExpenseCats, ['Pets', 'Gym']);
+  assert.deepEqual(data.settings.customIncomeCats, ['Freelance']);
+});
