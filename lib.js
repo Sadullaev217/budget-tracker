@@ -178,6 +178,34 @@ function monthlyExpenseSeries(transactions, now, months = 6){
   }));
 }
 
+function mergeCats(builtIn, custom){
+  if(!custom || !custom.length) return builtIn;
+  return [...builtIn, ...custom.filter(c => !builtIn.includes(c))];
+}
+
+function generateRecurringEntries(recurring, recurringGenerated, now, idFn){
+  if(!recurring || !recurring.length) return { entries: [], generated: {} };
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const entries = [];
+  const newGenerated = {};
+  recurring.forEach(r => {
+    const genKey = `${r.id}:${monthKey}`;
+    if(recurringGenerated[genKey]) return;
+    const day = Math.min(r.dayOfMonth || 1, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate());
+    const date = `${monthKey}-${String(day).padStart(2, '0')}`;
+    entries.push({
+      id: idFn(), type: r.type, amount: r.amount, category: r.category,
+      date, note: r.note ? `${r.note} (recurring)` : '(recurring)'
+    });
+    newGenerated[genKey] = true;
+  });
+  return { entries, generated: newGenerated };
+}
+
+function isOverBudget(spent, budget){
+  return budget > 0 && spent > budget;
+}
+
 if(typeof module !== 'undefined' && module.exports){
-  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries };
+  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, mergeCats, generateRecurringEntries, isOverBudget };
 }

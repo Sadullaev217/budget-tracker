@@ -1,7 +1,7 @@
 // Run with: node --test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DATA_VERSION, CURRENCIES, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries } = require('../lib.js');
+const { DATA_VERSION, CURRENCIES, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, mergeCats, generateRecurringEntries, isOverBudget } = require('../lib.js');
 
 test('toCents converts dollar strings to integer cents', () => {
   assert.equal(toCents('12.34'), 1234);
@@ -167,6 +167,48 @@ test('currentMonthByCategory sums only current-month expenses per category', () 
   ];
   const result = currentMonthByCategory(data, new Date(2026, 9, 20));   // Oct 2026
   assert.deepEqual(result, { Food: 3000, Transport: 500 });
+});
+
+test('mergeCats appends custom categories without duplicating built-in ones', () => {
+  const builtIn = ['Food', 'Housing', 'Other'];
+  assert.deepEqual(mergeCats(builtIn, ['Pets', 'Gym']), ['Food', 'Housing', 'Other', 'Pets', 'Gym']);
+  assert.deepEqual(mergeCats(builtIn, ['Food', 'Pets']), ['Food', 'Housing', 'Other', 'Pets']);
+  assert.deepEqual(mergeCats(builtIn, []), builtIn);
+  assert.deepEqual(mergeCats(builtIn, null), builtIn);
+});
+
+test('generateRecurringEntries creates entries with day clamping', () => {
+  let counter = 0;
+  const idFn = () => `id-${++counter}`;
+  const recurring = [
+    { id: 'r1', type: 'expense', amount: 100000, category: 'Rent', dayOfMonth: 1, note: 'Rent' },
+    { id: 'r2', type: 'expense', amount: 5000, category: 'Gym', dayOfMonth: 31, note: '' }
+  ];
+  const feb = new Date(2026, 1, 15); // Feb 2026 has 28 days
+  const { entries, generated } = generateRecurringEntries(recurring, {}, feb, idFn);
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0].date, '2026-02-01');
+  assert.equal(entries[0].note, 'Rent (recurring)');
+  assert.equal(entries[1].date, '2026-02-28'); // clamped from 31
+  assert.equal(entries[1].note, '(recurring)');
+  assert.equal(generated['r1:2026-02'], true);
+  assert.equal(generated['r2:2026-02'], true);
+});
+
+test('generateRecurringEntries is idempotent — skips already-generated months', () => {
+  let counter = 0;
+  const idFn = () => `id-${++counter}`;
+  const recurring = [{ id: 'r1', type: 'expense', amount: 1000, category: 'Food', dayOfMonth: 5, note: '' }];
+  const alreadyGenerated = { 'r1:2026-10': true };
+  const { entries } = generateRecurringEntries(recurring, alreadyGenerated, new Date(2026, 9, 20), idFn);
+  assert.equal(entries.length, 0);
+});
+
+test('isOverBudget detects when spending exceeds budget', () => {
+  assert.equal(isOverBudget(60000, 50000), true);
+  assert.equal(isOverBudget(40000, 50000), false);
+  assert.equal(isOverBudget(50000, 50000), false);
+  assert.equal(isOverBudget(10000, 0), false);
 });
 
 test('parseBackup round-trip preserves recurring, budgets, and custom categories', () => {

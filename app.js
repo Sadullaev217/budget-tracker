@@ -7,12 +7,10 @@ const INCOME_CATS = ['Salary','Freelance','Gift','Other'];
 let state = { transactions: [], goals: [], recurring: [], recurringGenerated: {} };
 
 function expenseCats(){
-  const custom = (state.settings && state.settings.customExpenseCats) || [];
-  return [...EXPENSE_CATS, ...custom.filter(c => !EXPENSE_CATS.includes(c))];
+  return mergeCats(EXPENSE_CATS, state.settings && state.settings.customExpenseCats);
 }
 function incomeCats(){
-  const custom = (state.settings && state.settings.customIncomeCats) || [];
-  return [...INCOME_CATS, ...custom.filter(c => !INCOME_CATS.includes(c))];
+  return mergeCats(INCOME_CATS, state.settings && state.settings.customIncomeCats);
 }
 let activeTab = 'overview';
 let txType = 'expense';
@@ -166,23 +164,11 @@ function loadUserData(){
 
 // Auto-generate transactions from recurring templates for the current month.
 function generateRecurring(){
-  if(!state.recurring || !state.recurring.length) return;
-  const now = new Date();
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  let added = false;
-  state.recurring.forEach(r => {
-    const genKey = `${r.id}:${monthKey}`;
-    if(state.recurringGenerated[genKey]) return;
-    const day = Math.min(r.dayOfMonth || 1, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate());
-    const date = `${monthKey}-${String(day).padStart(2, '0')}`;
-    state.transactions.push({
-      id: uid(), type: r.type, amount: r.amount, category: r.category,
-      date, note: r.note ? `${r.note} (recurring)` : '(recurring)'
-    });
-    state.recurringGenerated[genKey] = true;
-    added = true;
-  });
-  if(added) save();
+  const { entries, generated } = generateRecurringEntries(state.recurring, state.recurringGenerated || {}, new Date(), uid);
+  if(!entries.length) return;
+  entries.forEach(e => state.transactions.push(e));
+  Object.assign(state.recurringGenerated, generated);
+  save();
 }
 
 function restoreSession(){
@@ -403,7 +389,7 @@ function renderDaily(){
 
   const entryLines = selectedEntries.length
     ? selectedEntries.map(renderLedgerLine).join('')
-    : `<div class="empty">No entries on this day yet.</div>`;
+    : `<div class="empty">No entries on this day. Add one below.</div>`;
 
   const cats = dailyType === 'income' ? incomeCats() : expenseCats();
   const catOptions = cats.map(c => `<option value="${c}">${c}</option>`).join('');
@@ -708,7 +694,7 @@ function renderOverview(t){
     const pct = g.target > 0 ? Math.min(100, Math.round((g.saved / g.target)*100)) : 0;
     return `
       <div class="cat-row">
-        <div class="cat-top"><span>${escapeHtml(g.name)}</span><span class="amt">${fmt(g.saved)} / ${fmt(g.target)}</span></div>
+        <div class="cat-top"><span>${escapeHtml(g.name)}</span><span class="amt">${fmt(g.saved)} / ${fmt(g.target)} (${pct}%)</span></div>
         <div class="bar-track"><div class="bar-fill gold" style="width:${pct}%"></div></div>
       </div>`;
   }).join('') : `<div class="empty">No savings goals yet. Set one from the Savings Goals tab.</div>`;
@@ -1233,6 +1219,7 @@ function attachPanelHandlers(t){
       const note = document.getElementById('tx-note').value.trim();
       clearFields(['tx-amount', 'tx-category', 'tx-date', 'tx-note']);
       addTransaction({ type: txType, amount, category, date, note });
+      pendingFocus = '#tx-amount';
     });
   }
   // Search and filters
@@ -1342,8 +1329,14 @@ function attachPanelHandlers(t){
   document.querySelectorAll('[data-del-recurring]').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.delRecurring;
-      state.recurring = (state.recurring || []).filter(r => r.id !== id);
+      const idx = (state.recurring || []).findIndex(r => r.id === id);
+      if(idx < 0) return;
+      const [item] = state.recurring.splice(idx, 1);
       save(); render();
+      showUndoToast(`Deleted recurring "${item.note || item.category}".`, () => {
+        state.recurring.splice(Math.min(idx, state.recurring.length), 0, item);
+        save(); render();
+      });
     });
   });
 
@@ -1351,7 +1344,9 @@ function attachPanelHandlers(t){
   if(exportJsonBtn){
     exportJsonBtn.addEventListener('click', () => {
       downloadFile(backupFilename('json'), JSON.stringify({ ...state, v: DATA_VERSION, exportedAt: new Date().toISOString() }, null, 2), 'application/json');
-      setBackupStatus(`Exported ${state.transactions.length} transactions and ${state.goals.length} goals.`, false);
+      const parts = [`${state.transactions.length} transactions`, `${state.goals.length} goals`];
+      if(state.recurring && state.recurring.length) parts.push(`${state.recurring.length} recurring entries`);
+      setBackupStatus(`Exported ${parts.join(', ')}.`, false);
     });
     document.getElementById('export-csv-btn').addEventListener('click', () => {
       downloadFile(backupFilename('csv'), transactionsToCSV(state.transactions), 'text/csv');
