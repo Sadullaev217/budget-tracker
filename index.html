@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ledger — Budget Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f172a">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <script>
   // Apply the saved/system theme before first paint so there's no light-to-dark flash.
   (function(){
@@ -30,5 +33,6 @@
 <!-- ?v= keeps lib.js and app.js in step after a deploy (Pages caches assets for 10 min). Bump on release. -->
 <script src="lib.js?v=10"></script>
 <script src="app.js?v=10"></script>
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 </body>
 </html>
