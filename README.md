@@ -19,7 +19,17 @@ Open `index.html` in a browser. Fonts load from Google Fonts, so an internet con
 
 - `index.html`: page shell (plus a tiny inline script that applies the theme before first paint)
 - `style.css`: all styles; light and dark themes are CSS custom properties
+- `lib.js`: pure helpers (money in cents, dates, totals, data migration), shared by the app and the tests
 - `app.js`: app logic and rendering
+- `tests/`: unit tests for `lib.js`
+
+## Tests
+
+Requires Node 18 or newer:
+
+```bash
+node --test
+```
 
 ## Data and privacy
 

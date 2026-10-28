@@ -13,11 +13,8 @@ let currentUser = null;
 let authMode = 'signin';
 let authError = '';
 
-// Local calendar date as YYYY-MM-DD. (toISOString() is UTC, which flips to
-// "tomorrow" in the evening for anyone west of Greenwich.)
-function localISO(d){
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+// localISO, toCents, fmt, escapeHtml, migrateData, sumTotals, sumDay and
+// monthlyExpenseSeries live in lib.js (loaded first, and unit-tested).
 function todayISO(){ return localISO(new Date()); }
 let selectedDate = todayISO();
 let calYear = new Date().getFullYear();
@@ -35,22 +32,7 @@ function toggleTheme(){
 const SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>';
 const MOON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"></path></svg>';
 
-// Money is stored as integer cents (v2 data) so sums are exact: 10 + 20 === 30.
-// With dollar floats, 0.1 + 0.2 is 0.30000000000000004.
-const DATA_VERSION = 2;
-function toCents(value){
-  const n = parseFloat(value);
-  return Number.isFinite(n) ? Math.round(n * 100) : NaN;
-}
-function fmt(cents){
-  const neg = cents < 0;
-  const v = (Math.abs(cents) / 100).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-  return (neg ? '-' : '') + '$' + v;
-}
 function uid(){ return Math.random().toString(36).slice(2,10); }
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
 
 async function hashPassword(pw){
   if(window.crypto && window.crypto.subtle){
@@ -117,17 +99,9 @@ function loadUserData(){
   try{
     const raw = localStorage.getItem(userStorageKey(currentUser));
     if(raw){
-      state = JSON.parse(raw);
-      state.transactions = state.transactions || [];
-      state.goals = state.goals || [];
-      if(state.v !== DATA_VERSION){
-        // v1 stored dollar floats; convert to integer cents once.
-        const c = x => Math.round((Number(x) || 0) * 100);
-        state.transactions.forEach(t => { t.amount = c(t.amount); });
-        state.goals.forEach(g => { g.target = c(g.target); g.saved = c(g.saved); });
-        state.v = DATA_VERSION;
-        save();
-      }
+      const { data, changed } = migrateData(JSON.parse(raw));
+      state = data;
+      if(changed) save();
     }
   }catch(e){
     // no existing data yet
@@ -174,18 +148,7 @@ function contributeToGoal(id, amount){
   if(g){ g.saved = Math.max(0, g.saved + amount); save(); render(); }
 }
 
-function totals(){
-  let income = 0, expense = 0;
-  const byCategory = {};
-  state.transactions.forEach(t => {
-    if(t.type === 'income') income += t.amount;
-    else {
-      expense += t.amount;
-      byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
-    }
-  });
-  return { income, expense, balance: income - expense, byCategory };
-}
+function totals(){ return sumTotals(state.transactions); }
 
 function monthKey(dateStr){
   const d = new Date(dateStr + 'T00:00:00');
@@ -198,13 +161,7 @@ function transactionsForDate(dateStr){
   return state.transactions.filter(tx => tx.date === dateStr);
 }
 
-function dayTotals(dateStr){
-  let income = 0, expense = 0;
-  transactionsForDate(dateStr).forEach(tx => {
-    if(tx.type === 'income') income += tx.amount; else expense += tx.amount;
-  });
-  return { income, expense, net: income - expense };
-}
+function dayTotals(dateStr){ return sumDay(state.transactions, dateStr); }
 
 function shiftCalendar(delta){
   calMonthIdx += delta;
@@ -221,30 +178,12 @@ function goToToday(){
   render();
 }
 
-function monthlyExpenseSeries(){
-  const buckets = {};
-  state.transactions.forEach(tx => {
-    if(tx.type !== 'expense') return;
-    const d = new Date(tx.date + 'T00:00:00');
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    buckets[key] = (buckets[key] || 0) + tx.amount;
-  });
-  const keys = Object.keys(buckets).sort();
-  const recent = keys.slice(-6);
-  const years = new Set(recent.map(k => k.slice(0,4)));
-  return recent.map(key => {
-    const [y, m] = key.split('-').map(Number);
-    const d = new Date(y, m-1, 1);
-    const label = years.size > 1
-      ? d.toLocaleString(undefined, { month: 'short', year: '2-digit' })
-      : d.toLocaleString(undefined, { month: 'short' });
-    return { key, label, total: buckets[key] };
-  });
-}
-
 function renderChart(series){
-  if(!series.length){
-    return `<h2>Expenses by month</h2><div class="empty">No expenses logged yet. Add one from the Transactions tab.</div>`;
+  if(series.every(s => s.total === 0)){
+    const anyExpenses = state.transactions.some(t => t.type === 'expense');
+    return `<h2>Expenses by month</h2><div class="empty">${anyExpenses
+      ? 'No expenses in the last 6 months.'
+      : 'No expenses logged yet. Add one from the Transactions tab.'}</div>`;
   }
   // Size the viewBox to the real container width so SVG text renders 1:1
   // (a fixed 640px viewBox shrinks labels to ~4px on phones).
@@ -592,7 +531,7 @@ function renderOverview(t){
       </div>`;
   }).join('') : `<div class="empty">No savings goals yet. Set one from the Savings Goals tab.</div>`;
 
-  const chartSeries = monthlyExpenseSeries();
+  const chartSeries = monthlyExpenseSeries(state.transactions, new Date());
 
   return `
     <div class="bento-grid">
