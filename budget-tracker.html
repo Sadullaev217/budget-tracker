@@ -4,25 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ledger — Budget Tracker</title>
+<script>
+  // Apply the saved/system theme before first paint so there's no light-to-dark flash.
+  (function(){
+    var theme = 'light';
+    try{
+      var saved = localStorage.getItem('ledger-theme');
+      theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    }catch(e){}
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
-
   :root{
+    color-scheme: light;
     --bg: #F5F5F7;
     --surface: #FFFFFF;
     --surface-2: #F1F3F6;
     --surface-3: #E8ECF1;
     --text: #0F172A;
     --text-dim: #475569;
-    --text-dimmer: #94A3B8;
+    --text-dimmer: #5F6F85;
     --navy: #0F172A;
     --navy-light: #1E3A8A;
+    --focus: #1E3A8A;
     --gold: #A16207;
     --gold-soft: #D97706;
+    --gold-text: #854D0E;
     --income: #059669;
     --income-bg: rgba(5,150,105,0.1);
+    --income-text: #047857;
+    --income-solid: #047857;
     --expense: #DC2626;
     --expense-bg: rgba(220,38,38,0.1);
+    --expense-text: #B91C1C;
+    --expense-solid: #DC2626;
+    --on-solid: #FFFFFF;
     --border: #E2E8F0;
     --radius: 24px;
     --radius-sm: 14px;
@@ -30,21 +50,29 @@
   }
 
   :root[data-theme="dark"]{
+    color-scheme: dark;
     --bg: #0B1220;
     --surface: #131B2E;
     --surface-2: #1B2438;
     --surface-3: #232E47;
     --text: #E2E8F0;
     --text-dim: #94A3B8;
-    --text-dimmer: #64748B;
+    --text-dimmer: #7C8BA3;
     --navy: #2563EB;
     --navy-light: #3B82F6;
+    --focus: #60A5FA;
     --gold: #FBBF24;
     --gold-soft: #F59E0B;
+    --gold-text: #FBBF24;
     --income: #34D399;
     --income-bg: rgba(52,211,153,0.15);
+    --income-text: #34D399;
+    --income-solid: #34D399;
     --expense: #F87171;
     --expense-bg: rgba(248,113,113,0.15);
+    --expense-text: #F87171;
+    --expense-solid: #F87171;
+    --on-solid: #0B1220;
     --border: rgba(255,255,255,0.08);
     --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.3);
   }
@@ -92,7 +120,7 @@
   .header-actions{ display:flex; align-items:center; gap: 12px; }
 
   .theme-toggle{
-    width: 40px; height: 40px;
+    width: 44px; height: 44px;
     display:flex; align-items:center; justify-content:center;
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -114,7 +142,11 @@
     border-radius: 999px;
     padding: 4px;
     width: fit-content;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
+  .tabs::-webkit-scrollbar{ display: none; }
   .tab{
     background: none;
     border: none;
@@ -123,12 +155,20 @@
     font-size: 0.85rem;
     font-weight: 500;
     padding: 8px 16px;
+    min-height: 40px;
+    white-space: nowrap;
+    flex-shrink: 0;
     cursor: pointer;
     border-radius: 999px;
     transition: color .15s, background .15s;
   }
   .tab:hover{ color: var(--text); }
   .tab.active{ color: #fff; background: var(--navy); font-weight: 600; }
+
+  :where(button, input, select, [tabindex]):focus-visible{
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
 
   .panel{ display:none; }
   .panel.active{ display:block; animation: fade .25s ease; }
@@ -166,7 +206,7 @@
 
   .tile-label{
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     letter-spacing: 1.2px;
     text-transform: uppercase;
     color: var(--text-dimmer);
@@ -240,15 +280,16 @@
   .chart-hit{ fill: transparent; cursor: pointer; }
   .chart-bar-group:hover .chart-bar,
   .chart-bar-group:focus-within .chart-bar{ fill-opacity: 0.8; }
-  .chart-hit:focus-visible{ outline: 2px solid var(--navy-light); outline-offset: -2px; }
+  .chart-bar-group:focus{ outline: none; }
+  .chart-bar-group:focus-visible .chart-hit{ stroke: var(--focus); stroke-width: 2; }
   .chart-axis-label{
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
+    font-size: 11px;
     fill: var(--text-dimmer);
   }
   .chart-value-label{
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 9px;
+    font-size: 11px;
     fill: var(--text-dim);
   }
   .chart-baseline{ stroke: var(--border); stroke-width: 1; }
@@ -287,8 +328,8 @@
     margin-bottom: 16px;
   }
   .field{ flex: 1; min-width: 110px; display:flex; flex-direction:column; gap:6px; }
-  .field label{
-    font-size: 0.68rem;
+  .field label, .field .field-label{
+    font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 1px;
     color: var(--text-dimmer);
@@ -299,13 +340,13 @@
     border: 1px solid var(--border);
     color: var(--text);
     padding: 10px 12px;
+    min-height: 44px;
     border-radius: var(--radius-sm);
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.88rem;
-    outline: none;
     transition: border-color .15s, background .15s;
   }
-  input:focus, select:focus{ border-color: var(--navy); background: var(--surface); }
+  input:focus, select:focus{ border-color: var(--focus); background: var(--surface); }
   input::placeholder{ color: var(--text-dimmer); }
 
   .toggle-group{ display:flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow:hidden; background: var(--surface-2); }
@@ -315,19 +356,21 @@
     border:none;
     color: var(--text-dim);
     padding: 10px 12px;
+    min-height: 44px;
     font-size: 0.85rem;
     cursor: pointer;
     font-family: 'IBM Plex Sans', sans-serif;
     transition: background .15s, color .15s;
   }
-  .toggle-btn.active.income{ background: var(--income); color: #fff; font-weight:600; }
-  .toggle-btn.active.expense{ background: var(--expense); color: #fff; font-weight:600; }
+  .toggle-btn.active.income{ background: var(--income-solid); color: var(--on-solid); font-weight:600; }
+  .toggle-btn.active.expense{ background: var(--expense-solid); color: var(--on-solid); font-weight:600; }
 
   .btn{
     background: var(--navy);
     color: #fff;
     border: none;
     padding: 11px 20px;
+    min-height: 44px;
     border-radius: var(--radius-sm);
     font-weight: 600;
     font-size: 0.85rem;
@@ -337,10 +380,7 @@
   }
   .btn:hover{ background: var(--navy-light); }
   .btn:active{ transform: scale(0.98); }
-  .btn:focus-visible, .tab:focus-visible, .toggle-btn:focus-visible, input:focus-visible, select:focus-visible{
-    outline: 2px solid var(--navy-light);
-    outline-offset: 2px;
-  }
+  .tab:focus-visible, .toggle-btn:focus-visible{ outline-offset: -2px; }
   .btn.ghost{
     background: transparent;
     border: 1px solid var(--border);
@@ -351,7 +391,7 @@
   /* Transaction list */
   .ledger-month{
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 1.2px;
     color: var(--text-dimmer);
@@ -376,7 +416,7 @@
     text-overflow: ellipsis;
   }
   .ledger-line .cat-tag{
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: var(--text-dimmer);
   }
   .ledger-line .right{ display:flex; align-items:center; gap: 8px; flex-shrink:0; }
@@ -389,15 +429,17 @@
     padding: 4px 10px;
     border-radius: 999px;
   }
-  .ledger-line .amt.income{ color: var(--income); background: var(--income-bg); }
-  .ledger-line .amt.expense{ color: var(--expense); background: var(--expense-bg); }
+  .ledger-line .amt.income{ color: var(--income-text); background: var(--income-bg); }
+  .ledger-line .amt.expense{ color: var(--expense-text); background: var(--expense-bg); }
   .del{
+    display:flex; align-items:center; justify-content:center;
+    width: 40px; height: 40px; flex-shrink: 0;
     background:none; border:none; color: var(--text-dimmer);
-    cursor:pointer; font-size: 0.85rem; padding: 4px;
-    border-radius: 6px;
+    cursor:pointer; font-size: 0.9rem; padding: 0;
+    border-radius: 8px;
     transition: color .15s, background .15s;
   }
-  .del:hover{ color: var(--expense); background: var(--expense-bg); }
+  .del:hover{ color: var(--expense-text); background: var(--expense-bg); }
 
   .total-line{
     display:flex;
@@ -433,7 +475,7 @@
   .goal-nums .target{ color: var(--text-dimmer); }
   .goal-actions{ display:flex; gap: 8px; margin-top: 14px; align-items:center; }
   .goal-actions input{ width: 110px; }
-  .goal-pct{ font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--gold); margin-top: 6px; }
+  .goal-pct{ font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--gold-text); margin-top: 6px; }
 
   /* Daily calendar */
   .cal-nav{
@@ -442,7 +484,7 @@
   }
   .cal-nav-btns{ display:flex; align-items:center; gap: 8px; }
   .cal-nav button{
-    width: 32px; height: 32px;
+    width: 40px; height: 40px;
     display:flex; align-items:center; justify-content:center;
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -464,7 +506,7 @@
   .cal-weekday{
     text-align:center;
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.65rem;
+    font-size: 0.72rem;
     letter-spacing: 0.5px;
     text-transform: uppercase;
     color: var(--text-dimmer);
@@ -505,8 +547,8 @@
     color: var(--text-dim);
     margin-bottom: 16px;
   }
-  .day-detail-sub .net-positive{ color: var(--income); }
-  .day-detail-sub .net-negative{ color: var(--expense); }
+  .day-detail-sub .net-positive{ color: var(--income-text); }
+  .day-detail-sub .net-negative{ color: var(--expense-text); }
 
   .loading{ text-align:center; color: var(--text-dimmer); padding: 40px 0; }
 
@@ -544,7 +586,7 @@
   .auth-tabs{ width: 100%; margin-bottom: 20px; }
   .auth-tabs .tab{ flex:1; text-align:center; }
   .auth-error{
-    color: var(--expense);
+    color: var(--expense-text);
     background: var(--expense-bg);
     border-radius: 8px;
     padding: 8px 12px;
@@ -554,13 +596,13 @@
   .auth-note{
     text-align:center;
     color: var(--text-dimmer);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     margin-top: 18px;
     line-height: 1.5;
   }
   .signed-in-as{
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: var(--text-dimmer);
     text-align: right;
     margin-top: 3px;
@@ -613,17 +655,17 @@ let currentUser = null;
 let authMode = 'signin';
 let authError = '';
 
-const TODAY_ISO = new Date().toISOString().slice(0,10);
-let selectedDate = TODAY_ISO;
+// Local calendar date as YYYY-MM-DD. (toISOString() is UTC, which flips to
+// "tomorrow" in the evening for anyone west of Greenwich.)
+function localISO(d){
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function todayISO(){ return localISO(new Date()); }
+let selectedDate = todayISO();
 let calYear = new Date().getFullYear();
 let calMonthIdx = new Date().getMonth();
 
 const THEME_KEY = 'ledger-theme';
-function initTheme(){
-  const saved = localStorage.getItem(THEME_KEY);
-  const theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  document.documentElement.setAttribute('data-theme', theme);
-}
 function toggleTheme(){
   const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
   const next = current === 'dark' ? 'light' : 'dark';
@@ -635,9 +677,16 @@ function toggleTheme(){
 const SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>';
 const MOON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"></path></svg>';
 
-function fmt(n){
-  const neg = n < 0;
-  const v = Math.abs(n).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+// Money is stored as integer cents (v2 data) so sums are exact: 10 + 20 === 30.
+// With dollar floats, 0.1 + 0.2 is 0.30000000000000004.
+const DATA_VERSION = 2;
+function toCents(value){
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? Math.round(n * 100) : NaN;
+}
+function fmt(cents){
+  const neg = cents < 0;
+  const v = (Math.abs(cents) / 100).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
   return (neg ? '-' : '') + '$' + v;
 }
 function uid(){ return Math.random().toString(36).slice(2,10); }
@@ -713,6 +762,14 @@ function loadUserData(){
       state = JSON.parse(raw);
       state.transactions = state.transactions || [];
       state.goals = state.goals || [];
+      if(state.v !== DATA_VERSION){
+        // v1 stored dollar floats; convert to integer cents once.
+        const c = x => Math.round((Number(x) || 0) * 100);
+        state.transactions.forEach(t => { t.amount = c(t.amount); });
+        state.goals.forEach(g => { g.target = c(g.target); g.saved = c(g.saved); });
+        state.v = DATA_VERSION;
+        save();
+      }
     }
   }catch(e){
     // no existing data yet
@@ -731,6 +788,7 @@ function restoreSession(){
 function save(){
   if(!currentUser) return;
   try{
+    state.v = DATA_VERSION;
     localStorage.setItem(userStorageKey(currentUser), JSON.stringify(state));
   }catch(e){
     console.error('Could not save ledger data', e);
@@ -801,7 +859,7 @@ function goToToday(){
   const d = new Date();
   calYear = d.getFullYear();
   calMonthIdx = d.getMonth();
-  selectedDate = TODAY_ISO;
+  selectedDate = todayISO();
   render();
 }
 
@@ -830,8 +888,10 @@ function renderChart(series){
   if(!series.length){
     return `<h2>Expenses by month</h2><div class="empty">No expenses logged yet. Add one from the Transactions tab.</div>`;
   }
-  const W = 640, H = 180;
-  const padTop = 24, padBottom = 24, padSide = 8;
+  // Size the viewBox to the real container width so SVG text renders 1:1
+  // (a fixed 640px viewBox shrinks labels to ~4px on phones).
+  const W = Math.max(260, Math.min(900, window.innerWidth - 32) - 50), H = 190;
+  const padTop = 28, padBottom = 28, padSide = 8;
   const plotW = W - padSide*2;
   const plotH = H - padTop - padBottom;
   const max = Math.max(...series.map(s => s.total), 1);
@@ -839,6 +899,8 @@ function renderChart(series){
   const slot = plotW / n;
   const barW = Math.min(28, slot * 0.5);
   const baselineY = H - padBottom;
+  const compact = slot < 72;
+  const shortAmt = cents => { const v = cents / 100; return v >= 1000 ? '$' + (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : '$' + Math.round(v); };
 
   const bars = series.map((s, i) => {
     const cx = padSide + slot * i + slot / 2;
@@ -852,9 +914,9 @@ function renderChart(series){
     const valueText = fmt(s.total);
     return `
       <g class="chart-bar-group" tabindex="0" role="img" aria-label="${s.label}: ${valueText}" data-month="${s.label}" data-value="${valueText}" data-cx="${cx}" data-top="${y}">
-        <text class="chart-value-label" x="${cx}" y="${Math.max(y-6, 10)}" text-anchor="middle">${valueText}</text>
+        <text class="chart-value-label" x="${cx}" y="${Math.max(y-6, 12)}" text-anchor="middle">${compact ? shortAmt(s.total) : valueText}</text>
         <path class="chart-bar" d="${path}"></path>
-        <text class="chart-axis-label" x="${cx}" y="${H-6}" text-anchor="middle">${s.label}</text>
+        <text class="chart-axis-label" x="${cx}" y="${H-8}" text-anchor="middle" aria-hidden="true">${s.label}</text>
         <rect class="chart-hit" x="${padSide + slot*i}" y="${padTop}" width="${slot}" height="${plotH+padBottom}"></rect>
       </g>
     `;
@@ -885,14 +947,19 @@ function renderDaily(){
     const day = i + 1;
     const dateStr = `${calYear}-${pad2(calMonthIdx + 1)}-${pad2(day)}`;
     const dt = dayTotals(dateStr);
-    const isToday = dateStr === TODAY_ISO;
+    const isToday = dateStr === todayISO();
     const isSelected = dateStr === selectedDate;
     const dots = (dt.income > 0 ? '<span class="day-dot income"></span>' : '') +
                  (dt.expense > 0 ? '<span class="day-dot expense"></span>' : '');
+    const dayLabel = new Date(calYear, calMonthIdx, day).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const entryCount = transactionsForDate(dateStr).length;
+    const summary = entryCount
+      ? `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'}: income ${fmt(dt.income)}, expenses ${fmt(dt.expense)}`
+      : 'no entries';
     return `
-      <button type="button" class="day-cell ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-date="${dateStr}" aria-label="${dateStr}">
+      <button type="button" class="day-cell ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-date="${dateStr}" aria-pressed="${isSelected}"${isToday ? ' aria-current="date"' : ''} aria-label="${dayLabel}, ${summary}">
         <span class="day-num">${day}</span>
-        <span class="day-dots">${dots}</span>
+        <span class="day-dots" aria-hidden="true">${dots}</span>
       </button>
     `;
   }).join('');
@@ -905,12 +972,12 @@ function renderDaily(){
   const entryLines = selectedEntries.length ? selectedEntries.map(tx => `
     <div class="ledger-line">
       <div class="info">
-        <span class="desc">${tx.note || tx.category}</span>
-        <span class="cat-tag">${tx.category}</span>
+        <span class="desc">${escapeHtml(tx.note || tx.category)}</span>
+        <span class="cat-tag">${escapeHtml(tx.category)}</span>
       </div>
       <div class="right">
         <span class="amt ${tx.type}">${tx.type==='expense'?'-':'+'}${fmt(tx.amount)}</span>
-        <button class="del" data-del="${tx.id}" aria-label="Delete entry">✕</button>
+        <button class="del" data-del="${tx.id}" aria-label="Delete ${escapeHtml(tx.note || tx.category)} entry, ${tx.type==='expense'?'expense':'income'} of ${fmt(tx.amount)}"><span aria-hidden="true">✕</span></button>
       </div>
     </div>
   `).join('') : `<div class="empty">No entries on this day yet.</div>`;
@@ -943,24 +1010,24 @@ function renderDaily(){
       <h2>Add entry for this day</h2>
       <div class="form-row">
         <div class="field" style="flex: 0 0 160px;">
-          <label>Type</label>
-          <div class="toggle-group">
-            <button type="button" class="toggle-btn expense ${dailyType==='expense'?'active':''}" data-dtype="expense">Expense</button>
-            <button type="button" class="toggle-btn income ${dailyType==='income'?'active':''}" data-dtype="income">Income</button>
+          <span class="field-label" id="daily-type-label">Type</span>
+          <div class="toggle-group" role="group" aria-labelledby="daily-type-label">
+            <button type="button" class="toggle-btn expense ${dailyType==='expense'?'active':''}" data-dtype="expense" aria-pressed="${dailyType==='expense'}">Expense</button>
+            <button type="button" class="toggle-btn income ${dailyType==='income'?'active':''}" data-dtype="income" aria-pressed="${dailyType==='income'}">Income</button>
           </div>
         </div>
         <div class="field">
-          <label>Amount</label>
-          <input type="number" id="daily-amount" step="0.01" min="0" placeholder="0.00">
+          <label for="daily-amount">Amount</label>
+          <input type="number" id="daily-amount" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
         </div>
         <div class="field">
-          <label>Category</label>
+          <label for="daily-category">Category</label>
           <select id="daily-category">${catOptions}</select>
         </div>
       </div>
       <div class="form-row">
         <div class="field" style="flex: 3;">
-          <label>Note (optional)</label>
+          <label for="daily-note">Note (optional)</label>
           <input type="text" id="daily-note" placeholder="e.g. groceries at the market">
         </div>
       </div>
@@ -980,26 +1047,26 @@ function renderAuthScreen(){
         </div>
         <h1 class="auth-title">The Ledger</h1>
         <div class="auth-tagline">income, expenses & savings, kept in order</div>
-        <div class="tabs auth-tabs">
-          <button type="button" class="tab ${!isSignup?'active':''}" data-authmode="signin">Sign in</button>
-          <button type="button" class="tab ${isSignup?'active':''}" data-authmode="signup">Create account</button>
+        <div class="tabs auth-tabs" role="group" aria-label="Account mode">
+          <button type="button" class="tab ${!isSignup?'active':''}" data-authmode="signin" aria-pressed="${!isSignup}">Sign in</button>
+          <button type="button" class="tab ${isSignup?'active':''}" data-authmode="signup" aria-pressed="${isSignup}">Create account</button>
         </div>
         <form id="auth-form" novalidate>
           <div class="field" style="margin-bottom:14px;">
-            <label>Username</label>
-            <input type="text" id="auth-username" autocomplete="username" placeholder="e.g. jordan">
+            <label for="auth-username">Username</label>
+            <input type="text" id="auth-username" autocomplete="username" placeholder="e.g. jordan"${authError ? ' aria-invalid="true" aria-describedby="auth-error"' : ''}>
           </div>
           <div class="field" style="margin-bottom:14px;">
-            <label>Password</label>
-            <input type="password" id="auth-password" autocomplete="${isSignup ? 'new-password' : 'current-password'}" placeholder="••••••••">
+            <label for="auth-password">Password</label>
+            <input type="password" id="auth-password" autocomplete="${isSignup ? 'new-password' : 'current-password'}" placeholder="••••••••"${authError ? ' aria-invalid="true" aria-describedby="auth-error"' : ''}>
           </div>
           ${isSignup ? `
           <div class="field" style="margin-bottom:14px;">
-            <label>Confirm password</label>
+            <label for="auth-password-confirm">Confirm password</label>
             <input type="password" id="auth-password-confirm" autocomplete="new-password" placeholder="••••••••">
           </div>` : ''}
-          ${authError ? `<div class="auth-error">${escapeHtml(authError)}</div>` : ''}
-          <button type="submit" class="btn" style="width:100%;">${isSignup ? 'Create account' : 'Sign in'}</button>
+          ${authError ? `<div class="auth-error" id="auth-error" role="alert">${escapeHtml(authError)}</div>` : ''}
+          <button type="submit" id="auth-submit" class="btn" style="width:100%;">${isSignup ? 'Create account' : 'Sign in'}</button>
         </form>
         <div class="auth-note">Stored locally in this browser only — not a real account system.</div>
       </div>
@@ -1031,12 +1098,59 @@ function attachAuthHandlers(){
   }
 }
 
+// render() rebuilds the DOM, which drops keyboard focus; remember which control
+// had it and put focus back afterwards.
+const FOCUS_ATTRS = ['data-tab','data-date','data-type','data-dtype','data-cal-nav','data-authmode','data-del','data-delgoal','data-contribute'];
+function focusSelector(){
+  const el = document.activeElement;
+  if(!el || el === document.body) return null;
+  if(el.id) return '#' + CSS.escape(el.id);
+  if(el.hasAttribute('data-cal-today')) return '[data-cal-today]';
+  for(const a of FOCUS_ATTRS){
+    if(el.hasAttribute(a)) return `[${a}="${CSS.escape(el.getAttribute(a))}"]`;
+  }
+  return null;
+}
+function restoreFocus(sel){
+  if(!sel) return;
+  const el = document.querySelector(sel);
+  if(el) el.focus({ preventScroll: true });
+}
+
+// Same problem for typed-but-unsubmitted text: keep it across re-renders
+// (type toggle, theme toggle, failed sign-in). Passwords are never kept.
+function captureDrafts(){
+  const drafts = {};
+  document.querySelectorAll('#app input[id], #app select[id]').forEach(el => {
+    if(el.type === 'password' || !el.value) return;
+    drafts[el.id] = el.value;
+  });
+  return drafts;
+}
+function restoreDrafts(drafts){
+  Object.keys(drafts).forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    // A <select> whose options changed (e.g. expense -> income categories) keeps its default.
+    if(el.tagName === 'SELECT' && !Array.from(el.options).some(o => o.value === drafts[id])) return;
+    el.value = drafts[id];
+  });
+}
+// Called after a successful submit so the form comes back empty rather than restored.
+function clearFields(ids){
+  ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+}
+
 function render(){
   const app = document.getElementById('app');
+  const focusSel = focusSelector();
+  const drafts = captureDrafts();
 
   if(!currentUser){
     app.innerHTML = renderAuthScreen();
     attachAuthHandlers();
+    restoreDrafts(drafts);
+    restoreFocus(focusSel);
     return;
   }
 
@@ -1059,13 +1173,13 @@ function render(){
         <button type="button" class="btn ghost" id="sign-out-btn" style="padding:9px 16px; font-size:0.78rem;">Sign out</button>
       </div>
     </div>
-    <div class="tabs">
-      <button class="tab ${activeTab==='overview'?'active':''}" data-tab="overview">Overview</button>
-      <button class="tab ${activeTab==='transactions'?'active':''}" data-tab="transactions">Transactions</button>
-      <button class="tab ${activeTab==='daily'?'active':''}" data-tab="daily">Daily</button>
-      <button class="tab ${activeTab==='goals'?'active':''}" data-tab="goals">Savings Goals</button>
-    </div>
-    <div id="panels"></div>
+    <nav class="tabs" aria-label="Sections">
+      <button type="button" class="tab ${activeTab==='overview'?'active':''}" data-tab="overview" ${activeTab==='overview'?'aria-current="page"':''}>Overview</button>
+      <button type="button" class="tab ${activeTab==='transactions'?'active':''}" data-tab="transactions" ${activeTab==='transactions'?'aria-current="page"':''}>Transactions</button>
+      <button type="button" class="tab ${activeTab==='daily'?'active':''}" data-tab="daily" ${activeTab==='daily'?'aria-current="page"':''}>Daily</button>
+      <button type="button" class="tab ${activeTab==='goals'?'active':''}" data-tab="goals" ${activeTab==='goals'?'aria-current="page"':''}>Savings Goals</button>
+    </nav>
+    <main id="panels"></main>
   `;
 
   document.querySelectorAll('.tab').forEach(btn=>{
@@ -1083,7 +1197,21 @@ function render(){
   else panels.innerHTML = renderGoals();
 
   attachPanelHandlers(t);
+  restoreDrafts(drafts);
+  restoreFocus(focusSel);
 }
+
+// Chart geometry depends on viewport width, so redraw when the width changes.
+let lastViewportW = window.innerWidth;
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if(window.innerWidth === lastViewportW) return;
+    lastViewportW = window.innerWidth;
+    if(currentUser && activeTab === 'overview') render();
+  }, 150);
+});
 
 function renderOverview(t){
   const balClass = t.balance < 0 ? 'negative' : 'positive';
@@ -1092,7 +1220,7 @@ function renderOverview(t){
 
   const catRows = catEntries.length ? catEntries.map(([cat, amt]) => `
     <div class="cat-row">
-      <div class="cat-top"><span>${cat}</span><span class="amt">${fmt(amt)}</span></div>
+      <div class="cat-top"><span>${escapeHtml(cat)}</span><span class="amt">${fmt(amt)}</span></div>
       <div class="bar-track"><div class="bar-fill navy" style="width:${Math.round((amt/maxCat)*100)}%"></div></div>
     </div>
   `).join('') : `<div class="empty">No expenses logged yet. Add one from the Transactions tab.</div>`;
@@ -1101,7 +1229,7 @@ function renderOverview(t){
     const pct = g.target > 0 ? Math.min(100, Math.round((g.saved / g.target)*100)) : 0;
     return `
       <div class="cat-row">
-        <div class="cat-top"><span>${g.name}</span><span class="amt">${fmt(g.saved)} / ${fmt(g.target)}</span></div>
+        <div class="cat-top"><span>${escapeHtml(g.name)}</span><span class="amt">${fmt(g.saved)} / ${fmt(g.target)}</span></div>
         <div class="bar-track"><div class="bar-fill gold" style="width:${pct}%"></div></div>
       </div>`;
   }).join('') : `<div class="empty">No savings goals yet. Set one from the Savings Goals tab.</div>`;
@@ -1153,12 +1281,12 @@ function renderTransactions(t){
     ${txs.map(tx => `
       <div class="ledger-line">
         <div class="info">
-          <span class="desc">${tx.note || tx.category}</span>
-          <span class="cat-tag">${tx.category}</span>
+          <span class="desc">${escapeHtml(tx.note || tx.category)}</span>
+          <span class="cat-tag">${escapeHtml(tx.category)}</span>
         </div>
         <div class="right">
           <span class="amt ${tx.type}">${tx.type==='expense'?'-':'+'}${fmt(tx.amount)}</span>
-          <button class="del" data-del="${tx.id}" aria-label="Delete entry">✕</button>
+          <button class="del" data-del="${tx.id}" aria-label="Delete ${escapeHtml(tx.note || tx.category)} entry, ${tx.type==='expense'?'expense':'income'} of ${fmt(tx.amount)}"><span aria-hidden="true">✕</span></button>
         </div>
       </div>
     `).join('')}
@@ -1169,28 +1297,28 @@ function renderTransactions(t){
       <h2>New entry</h2>
       <div class="form-row">
         <div class="field" style="flex: 0 0 160px;">
-          <label>Type</label>
-          <div class="toggle-group">
-            <button type="button" class="toggle-btn expense ${txType==='expense'?'active':''}" data-type="expense">Expense</button>
-            <button type="button" class="toggle-btn income ${txType==='income'?'active':''}" data-type="income">Income</button>
+          <span class="field-label" id="tx-type-label">Type</span>
+          <div class="toggle-group" role="group" aria-labelledby="tx-type-label">
+            <button type="button" class="toggle-btn expense ${txType==='expense'?'active':''}" data-type="expense" aria-pressed="${txType==='expense'}">Expense</button>
+            <button type="button" class="toggle-btn income ${txType==='income'?'active':''}" data-type="income" aria-pressed="${txType==='income'}">Income</button>
           </div>
         </div>
         <div class="field">
-          <label>Amount</label>
-          <input type="number" id="tx-amount" step="0.01" min="0" placeholder="0.00">
+          <label for="tx-amount">Amount</label>
+          <input type="number" id="tx-amount" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
         </div>
         <div class="field">
-          <label>Category</label>
+          <label for="tx-category">Category</label>
           <select id="tx-category">${catOptions}</select>
         </div>
         <div class="field">
-          <label>Date</label>
-          <input type="date" id="tx-date" value="${new Date().toISOString().slice(0,10)}">
+          <label for="tx-date">Date</label>
+          <input type="date" id="tx-date" value="${todayISO()}">
         </div>
       </div>
       <div class="form-row">
         <div class="field" style="flex: 3;">
-          <label>Note (optional)</label>
+          <label for="tx-note">Note (optional)</label>
           <input type="text" id="tx-note" placeholder="e.g. groceries at the market">
         </div>
       </div>
@@ -1214,14 +1342,14 @@ function renderGoals(){
     return `
       <div class="goal-card">
         <div class="goal-top">
-          <span class="goal-name">${g.name}</span>
-          <button class="del" data-delgoal="${g.id}" aria-label="Delete goal">✕</button>
+          <span class="goal-name">${escapeHtml(g.name)}</span>
+          <button class="del" data-delgoal="${g.id}" aria-label="Delete goal ${escapeHtml(g.name)}"><span aria-hidden="true">✕</span></button>
         </div>
         <div class="goal-nums">${fmt(g.saved)} <span class="target">of ${fmt(g.target)}</span></div>
         <div class="bar-track" style="margin-top:10px;"><div class="bar-fill gold" style="width:${pct}%"></div></div>
         <div class="goal-pct">${pct}% funded</div>
         <div class="goal-actions">
-          <input type="number" min="0" step="0.01" placeholder="Amount" id="contrib-${g.id}">
+          <input type="number" min="0" step="0.01" placeholder="Amount" inputmode="decimal" id="contrib-${g.id}" aria-label="Amount to add to ${escapeHtml(g.name)}">
           <button class="btn ghost" data-contribute="${g.id}">Add funds</button>
         </div>
       </div>
@@ -1237,12 +1365,12 @@ function renderGoals(){
       <h2>New goal</h2>
       <div class="form-row">
         <div class="field" style="flex:2;">
-          <label>Goal name</label>
+          <label for="goal-name">Goal name</label>
           <input type="text" id="goal-name" placeholder="e.g. Emergency fund">
         </div>
         <div class="field">
-          <label>Target amount</label>
-          <input type="number" min="0" step="0.01" id="goal-target" placeholder="0.00">
+          <label for="goal-target">Target amount</label>
+          <input type="number" min="0" step="0.01" id="goal-target" placeholder="0.00" inputmode="decimal">
         </div>
       </div>
       <button class="btn" id="add-goal-btn">Create goal</button>
@@ -1251,6 +1379,17 @@ function renderGoals(){
 }
 
 function attachPanelHandlers(t){
+  // Enter submits the card's primary button (these cards aren't <form>s)
+  document.querySelectorAll('.card input, .goal-card input').forEach(inp => {
+    inp.addEventListener('keydown', (e) => {
+      if(e.key !== 'Enter') return;
+      e.preventDefault();
+      const scope = inp.closest('.goal-card, .card');
+      const primary = scope && scope.querySelector('button.btn');
+      if(primary) primary.click();
+    });
+  });
+
   // Monthly expense chart
   const barGroups = document.querySelectorAll('.chart-bar-group');
   if(barGroups.length){
@@ -1260,8 +1399,9 @@ function attachPanelHandlers(t){
     const showTip = (g) => {
       const svgRect = svg.getBoundingClientRect();
       const wrapRect = wrap.getBoundingClientRect();
-      const scaleX = svgRect.width / 640;
-      const scaleY = svgRect.height / 180;
+      const vb = svg.viewBox.baseVal;
+      const scaleX = svgRect.width / vb.width;
+      const scaleY = svgRect.height / vb.height;
       const px = (svgRect.left - wrapRect.left) + parseFloat(g.dataset.cx) * scaleX;
       const py = (svgRect.top - wrapRect.top) + parseFloat(g.dataset.top) * scaleY;
       tooltip.innerHTML = '';
@@ -1298,10 +1438,11 @@ function attachPanelHandlers(t){
   const addDailyTxBtn = document.getElementById('add-daily-tx-btn');
   if(addDailyTxBtn){
     addDailyTxBtn.addEventListener('click', () => {
-      const amount = parseFloat(document.getElementById('daily-amount').value);
+      const amount = toCents(document.getElementById('daily-amount').value);
       const category = document.getElementById('daily-category').value;
       const note = document.getElementById('daily-note').value.trim();
       if(!amount || amount <= 0){ return; }
+      clearFields(['daily-amount', 'daily-category', 'daily-note']);
       addTransaction({ type: dailyType, amount, category, date: selectedDate, note });
     });
   }
@@ -1313,11 +1454,12 @@ function attachPanelHandlers(t){
   const addTxBtn = document.getElementById('add-tx-btn');
   if(addTxBtn){
     addTxBtn.addEventListener('click', () => {
-      const amount = parseFloat(document.getElementById('tx-amount').value);
+      const amount = toCents(document.getElementById('tx-amount').value);
       const category = document.getElementById('tx-category').value;
-      const date = document.getElementById('tx-date').value || new Date().toISOString().slice(0,10);
+      const date = document.getElementById('tx-date').value || todayISO();
       const note = document.getElementById('tx-note').value.trim();
       if(!amount || amount <= 0){ return; }
+      clearFields(['tx-amount', 'tx-category', 'tx-date', 'tx-note']);
       addTransaction({ type: txType, amount, category, date, note });
     });
   }
@@ -1330,8 +1472,9 @@ function attachPanelHandlers(t){
   if(addGoalBtn){
     addGoalBtn.addEventListener('click', () => {
       const name = document.getElementById('goal-name').value.trim();
-      const target = parseFloat(document.getElementById('goal-target').value);
+      const target = toCents(document.getElementById('goal-target').value);
       if(!name || !target || target <= 0){ return; }
+      clearFields(['goal-name', 'goal-target']);
       addGoal({ name, target });
     });
   }
@@ -1342,14 +1485,14 @@ function attachPanelHandlers(t){
     btn.addEventListener('click', () => {
       const id = btn.dataset.contribute;
       const input = document.getElementById(`contrib-${id}`);
-      const amount = parseFloat(input.value);
+      const amount = toCents(input.value);
       if(!amount || amount <= 0) return;
+      clearFields([`contrib-${id}`]);
       contributeToGoal(id, amount);
     });
   });
 }
 
-initTheme();
 restoreSession();
 </script>
 </body>
