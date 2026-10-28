@@ -115,6 +115,18 @@ function filterTransactions(transactions, { query = '', type = 'all', category =
   );
 }
 
+// Expenses for the current calendar month, grouped by category.
+function currentMonthByCategory(transactions, now){
+  const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const byCategory = {};
+  transactions.forEach(t => {
+    if(t.type === 'expense' && String(t.date).startsWith(prefix)){
+      byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
+    }
+  });
+  return byCategory;
+}
+
 function sumTotals(transactions){
   let income = 0, expense = 0;
   const byCategory = {};
@@ -162,5 +174,5 @@ function monthlyExpenseSeries(transactions, now, months = 6){
 }
 
 if(typeof module !== 'undefined' && module.exports){
-  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, sumTotals, sumDay, monthlyExpenseSeries };
+  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries };
 }

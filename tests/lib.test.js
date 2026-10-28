@@ -1,7 +1,7 @@
 // Run with: node --test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DATA_VERSION, CURRENCIES, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, sumTotals, sumDay, monthlyExpenseSeries } = require('../lib.js');
+const { DATA_VERSION, CURRENCIES, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries } = require('../lib.js');
 
 test('toCents converts dollar strings to integer cents', () => {
   assert.equal(toCents('12.34'), 1234);
@@ -155,4 +155,16 @@ test('filterTransactions matches note/category text and type/category filters', 
   assert.deepEqual(ids({ type: 'income' }), [3]);
   assert.deepEqual(ids({ category: 'Food', query: 'lunch' }), [4]);
   assert.deepEqual(ids({ type: 'income', category: 'Food' }), []);
+});
+
+test('currentMonthByCategory sums only current-month expenses per category', () => {
+  const data = [
+    { type: 'expense', amount: 1000, category: 'Food', date: '2026-10-05' },
+    { type: 'expense', amount: 2000, category: 'Food', date: '2026-10-18' },
+    { type: 'expense', amount: 500, category: 'Transport', date: '2026-10-10' },
+    { type: 'expense', amount: 9999, category: 'Food', date: '2026-09-30' },   // previous month
+    { type: 'income', amount: 5000, category: 'Salary', date: '2026-10-01' }   // income ignored
+  ];
+  const result = currentMonthByCategory(data, new Date(2026, 9, 20));   // Oct 2026
+  assert.deepEqual(result, { Food: 3000, Transport: 500 });
 });

@@ -651,15 +651,25 @@ window.addEventListener('resize', () => {
 
 function renderOverview(t){
   const balClass = t.balance < 0 ? 'negative' : 'positive';
+  const budgets = (state.settings && state.settings.budgets) || {};
+  const monthSpend = currentMonthByCategory(state.transactions, new Date());
   const catEntries = Object.entries(t.byCategory).sort((a,b)=>b[1]-a[1]);
   const maxCat = catEntries.length ? catEntries[0][1] : 1;
 
-  const catRows = catEntries.length ? catEntries.map(([cat, amt]) => `
-    <div class="cat-row">
+  const catRows = catEntries.length ? catEntries.map(([cat, amt]) => {
+    const budget = budgets[cat];
+    const spent = monthSpend[cat] || 0;
+    const over = budget > 0 && spent > budget;
+    const budgetInfo = budget > 0
+      ? `<span class="budget-info${over ? ' over-budget' : ''}">${fmt(spent)} / ${fmt(budget)} this month${over ? ' — over budget!' : ''}</span>`
+      : '';
+    return `
+    <div class="cat-row${over ? ' over-budget-row' : ''}">
       <div class="cat-top"><span>${escapeHtml(cat)}</span><span class="amt">${fmt(amt)}</span></div>
+      ${budgetInfo}
       <div class="bar-track"><div class="bar-fill navy" style="width:${Math.round((amt/maxCat)*100)}%"></div></div>
-    </div>
-  `).join('') : `<div class="empty">No expenses logged yet. Add one from the Transactions tab.</div>`;
+    </div>`;
+  }).join('') : `<div class="empty">No expenses logged yet. Add one from the Transactions tab.</div>`;
 
   const goalsSummary = state.goals.length ? state.goals.map(g => {
     const pct = g.target > 0 ? Math.min(100, Math.round((g.saved / g.target)*100)) : 0;
@@ -809,6 +819,7 @@ function isFiltering(){ return !!txFilter.query.trim() || txFilter.type !== 'all
 function renderTransactions(t){
   const cats = txType === 'income' ? INCOME_CATS : EXPENSE_CATS;
   const catOptions = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  const budgets = (state.settings && state.settings.budgets) || {};
 
   // Newest date first (stable sort keeps same-day entries in insertion order),
   // so month groups appear in date order even after back-dated or edited entries.
@@ -909,6 +920,21 @@ function renderTransactions(t){
           ${CURRENCIES.map(c => `<option value="${c}"${c === userCurrency() ? ' selected' : ''}>${c} (${formatMoney(123456, c)})</option>`).join('')}
         </select>
       </div>
+    </div>
+    <div class="card">
+      <h2>Monthly Budgets</h2>
+      <p class="card-help">Set a monthly spending limit per category. Leave blank or 0 to remove.</p>
+      <div class="budget-grid">
+        ${EXPENSE_CATS.map(cat => {
+          const val = budgets[cat] ? (budgets[cat] / 100).toFixed(2) : '';
+          return `
+          <div class="budget-row">
+            <label for="budget-${escapeHtml(cat)}">${escapeHtml(cat)}</label>
+            <input type="number" id="budget-${escapeHtml(cat)}" class="budget-input" data-budget-cat="${escapeHtml(cat)}" min="0" step="0.01" placeholder="0.00" value="${val}">
+          </div>`;
+        }).join('')}
+      </div>
+      <button type="button" class="btn ghost" id="save-budgets-btn">Save budgets</button>
     </div>
     <div class="card">
       <h2>Backup</h2>
@@ -1126,6 +1152,21 @@ function attachPanelHandlers(t){
   if(currencySel){
     currencySel.addEventListener('change', () => {
       state.settings = { ...(state.settings || {}), currency: currencySel.value };
+      save(); render();
+    });
+  }
+
+  // Monthly budgets
+  const saveBudgetsBtn = document.getElementById('save-budgets-btn');
+  if(saveBudgetsBtn){
+    saveBudgetsBtn.addEventListener('click', () => {
+      const budgets = {};
+      document.querySelectorAll('.budget-input').forEach(inp => {
+        const cat = inp.dataset.budgetCat;
+        const cents = toCents(inp.value);
+        if(Number.isFinite(cents) && cents > 0) budgets[cat] = cents;
+      });
+      state.settings = { ...(state.settings || {}), budgets };
       save(); render();
     });
   }

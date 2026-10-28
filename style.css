@@ -345,6 +345,15 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
   color: var(--focus); font: inherit; font-weight: 600; cursor: pointer;
   text-decoration: underline; text-underline-offset: 3px;
 }
+/* Monthly budgets */
+.budget-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 16px; margin-bottom: 14px; }
+.budget-row{ display: flex; align-items: center; gap: 8px; }
+.budget-row label{ flex: 1; font-size: 0.85rem; }
+.budget-row input{ width: 100px; }
+.budget-info{ display: block; font-size: 0.75rem; color: var(--text-dim); margin-top: -2px; }
+.budget-info.over-budget{ color: var(--expense-text); font-weight: 600; }
+.over-budget-row .bar-fill{ background: var(--expense-text) !important; }
+
 .card-help{ color: var(--text-dim); font-size: 0.85rem; margin: -8px 0 14px; line-height: 1.5; }
 .backup-actions{ display:flex; flex-wrap: wrap; gap: 8px; }
 .backup-status{ font-size: 0.82rem; color: var(--text-dim); margin-top: 10px; min-height: 1.2em; }
