@@ -345,6 +345,19 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
   color: var(--focus); font: inherit; font-weight: 600; cursor: pointer;
   text-decoration: underline; text-underline-offset: 3px;
 }
+/* Custom categories */
+.custom-cats-section{ margin-top: 16px; }
+.custom-cats-section h3{ font-size: 0.9rem; margin: 0 0 8px; color: var(--text-dim); }
+.custom-cats-row{ display: flex; gap: 8px; margin-bottom: 8px; }
+.custom-cats-row input{ flex: 1; }
+.custom-cat-tags{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; font-size: 0.82rem; }
+.cat-chip{
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 8px; border-radius: 12px;
+  background: var(--card); border: 1px solid var(--border);
+}
+.chip-remove{ background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 0.7rem; padding: 0 2px; line-height: 1; }
+
 /* Monthly budgets */
 .budget-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 16px; margin-bottom: 14px; }
 .budget-row{ display: flex; align-items: center; gap: 8px; }

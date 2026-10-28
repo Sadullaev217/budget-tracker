@@ -4,7 +4,16 @@ const SESSION_KEY = 'ledger-current-user';
 const EXPENSE_CATS = ['Food','Housing','Transport','Utilities','Entertainment','Health','Other'];
 const INCOME_CATS = ['Salary','Freelance','Gift','Other'];
 
-let state = { transactions: [], goals: [] };
+let state = { transactions: [], goals: [], recurring: [], recurringGenerated: {} };
+
+function expenseCats(){
+  const custom = (state.settings && state.settings.customExpenseCats) || [];
+  return [...EXPENSE_CATS, ...custom.filter(c => !EXPENSE_CATS.includes(c))];
+}
+function incomeCats(){
+  const custom = (state.settings && state.settings.customIncomeCats) || [];
+  return [...INCOME_CATS, ...custom.filter(c => !INCOME_CATS.includes(c))];
+}
 let activeTab = 'overview';
 let txType = 'expense';
 let dailyType = 'expense';
@@ -139,17 +148,41 @@ function signOut(){
 }
 
 function loadUserData(){
-  state = { transactions: [], goals: [] };
+  state = { transactions: [], goals: [], recurring: [], recurringGenerated: {} };
   try{
     const raw = localStorage.getItem(userStorageKey(currentUser));
     if(raw){
       const { data, changed } = migrateData(JSON.parse(raw));
       state = data;
+      if(!state.recurring) state.recurring = [];
+      if(!state.recurringGenerated) state.recurringGenerated = {};
       if(changed) save();
     }
   }catch(e){
     // no existing data yet
   }
+  generateRecurring();
+}
+
+// Auto-generate transactions from recurring templates for the current month.
+function generateRecurring(){
+  if(!state.recurring || !state.recurring.length) return;
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  let added = false;
+  state.recurring.forEach(r => {
+    const genKey = `${r.id}:${monthKey}`;
+    if(state.recurringGenerated[genKey]) return;
+    const day = Math.min(r.dayOfMonth || 1, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate());
+    const date = `${monthKey}-${String(day).padStart(2, '0')}`;
+    state.transactions.push({
+      id: uid(), type: r.type, amount: r.amount, category: r.category,
+      date, note: r.note ? `${r.note} (recurring)` : '(recurring)'
+    });
+    state.recurringGenerated[genKey] = true;
+    added = true;
+  });
+  if(added) save();
 }
 
 function restoreSession(){
@@ -372,7 +405,7 @@ function renderDaily(){
     ? selectedEntries.map(renderLedgerLine).join('')
     : `<div class="empty">No entries on this day yet.</div>`;
 
-  const cats = dailyType === 'income' ? INCOME_CATS : EXPENSE_CATS;
+  const cats = dailyType === 'income' ? incomeCats() : expenseCats();
   const catOptions = cats.map(c => `<option value="${c}">${c}</option>`).join('');
 
   return `
@@ -736,7 +769,7 @@ function renderLedgerLine(tx){
 }
 
 function categoryOptions(type, selected){
-  const cats = type === 'income' ? INCOME_CATS : EXPENSE_CATS;
+  const cats = type === 'income' ? incomeCats() : expenseCats();
   const list = cats.includes(selected) || !selected ? cats : [selected, ...cats];   // keep a stored category not in the list
   return list.map(c => `<option value="${escapeHtml(c)}"${c === selected ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
 }
@@ -817,7 +850,7 @@ let txFilter = { query: '', type: 'all', category: 'all' };
 function isFiltering(){ return !!txFilter.query.trim() || txFilter.type !== 'all' || txFilter.category !== 'all'; }
 
 function renderTransactions(t){
-  const cats = txType === 'income' ? INCOME_CATS : EXPENSE_CATS;
+  const cats = txType === 'income' ? incomeCats() : expenseCats();
   const catOptions = cats.map(c => `<option value="${c}">${c}</option>`).join('');
   const budgets = (state.settings && state.settings.budgets) || {};
 
@@ -842,7 +875,7 @@ function renderTransactions(t){
     ${txs.map(renderLedgerLine).join('')}
   `).join('') : `<div class="empty">${emptyMsg}</div>`;
 
-  const allCats = Array.from(new Set([...EXPENSE_CATS, ...INCOME_CATS, ...state.transactions.map(t => t.category)]));
+  const allCats = Array.from(new Set([...expenseCats(), ...incomeCats(), ...state.transactions.map(t => t.category)]));
   const filterBar = state.transactions.length ? `
     <div class="filter-bar" role="search" aria-label="Filter entries">
       <div class="field filter-query">
@@ -920,12 +953,31 @@ function renderTransactions(t){
           ${CURRENCIES.map(c => `<option value="${c}"${c === userCurrency() ? ' selected' : ''}>${c} (${formatMoney(123456, c)})</option>`).join('')}
         </select>
       </div>
+      <div class="custom-cats-section">
+        <h3>Custom categories</h3>
+        <div class="custom-cats-row">
+          <input type="text" id="new-expense-cat" placeholder="New expense category" maxlength="30">
+          <button type="button" class="btn ghost" id="add-expense-cat-btn">Add</button>
+        </div>
+        ${((state.settings && state.settings.customExpenseCats) || []).length ? `
+        <div class="custom-cat-tags">Expense: ${((state.settings && state.settings.customExpenseCats) || []).map(c =>
+          `<span class="cat-chip">${escapeHtml(c)} <button type="button" class="chip-remove" data-remove-ecat="${escapeHtml(c)}" aria-label="Remove ${escapeHtml(c)}">✕</button></span>`
+        ).join('')}</div>` : ''}
+        <div class="custom-cats-row">
+          <input type="text" id="new-income-cat" placeholder="New income category" maxlength="30">
+          <button type="button" class="btn ghost" id="add-income-cat-btn">Add</button>
+        </div>
+        ${((state.settings && state.settings.customIncomeCats) || []).length ? `
+        <div class="custom-cat-tags">Income: ${((state.settings && state.settings.customIncomeCats) || []).map(c =>
+          `<span class="cat-chip">${escapeHtml(c)} <button type="button" class="chip-remove" data-remove-icat="${escapeHtml(c)}" aria-label="Remove ${escapeHtml(c)}">✕</button></span>`
+        ).join('')}</div>` : ''}
+      </div>
     </div>
     <div class="card">
       <h2>Monthly Budgets</h2>
       <p class="card-help">Set a monthly spending limit per category. Leave blank or 0 to remove.</p>
       <div class="budget-grid">
-        ${EXPENSE_CATS.map(cat => {
+        ${expenseCats().map(cat => {
           const val = budgets[cat] ? (budgets[cat] / 100).toFixed(2) : '';
           return `
           <div class="budget-row">
@@ -935,6 +987,56 @@ function renderTransactions(t){
         }).join('')}
       </div>
       <button type="button" class="btn ghost" id="save-budgets-btn">Save budgets</button>
+    </div>
+    <div class="card">
+      <h2>Recurring Entries</h2>
+      <p class="card-help">Entries added here are auto-generated once at the start of each month.</p>
+      <div class="recurring-form">
+        <div class="filter-bar">
+          <div class="field">
+            <label for="rec-type">Type</label>
+            <select id="rec-type">
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="rec-amount">Amount</label>
+            <input type="number" id="rec-amount" placeholder="0.00" min="0" step="0.01">
+          </div>
+          <div class="field">
+            <label for="rec-category">Category</label>
+            <select id="rec-category">
+              ${expenseCats().map(c => `<option value="${c}">${c}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label for="rec-day">Day of month</label>
+            <input type="number" id="rec-day" placeholder="1" min="1" max="31" value="1">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:8px">
+          <label for="rec-note">Note (optional)</label>
+          <input type="text" id="rec-note" placeholder="e.g. Monthly rent">
+        </div>
+        <button type="button" class="btn ghost" id="add-recurring-btn">Add recurring entry</button>
+      </div>
+      ${state.recurring && state.recurring.length ? `
+      <div class="recurring-list">
+        ${state.recurring.map(r => `
+          <div class="ledger-line">
+            <div class="info">
+              <span class="desc">${escapeHtml(r.note || r.category)}</span>
+              <span class="cat-tag">${escapeHtml(r.category)}</span>
+              <span class="cat-tag">Day ${r.dayOfMonth || 1}</span>
+            </div>
+            <div class="right">
+              <span class="amt ${r.type}">${r.type==='expense'?'-':'+'}${fmt(r.amount)}</span>
+              <button type="button" class="del" data-del-recurring="${r.id}" aria-label="Remove recurring ${escapeHtml(r.note || r.category)}"><span aria-hidden="true">✕</span></button>
+            </div>
+          </div>
+        `).join('')}
+      </div>` : ''}
     </div>
     <div class="card">
       <h2>Backup</h2>
@@ -1156,6 +1258,45 @@ function attachPanelHandlers(t){
     });
   }
 
+  // Custom categories
+  function addCustomCat(key, inputId){
+    const inp = document.getElementById(inputId);
+    if(!inp) return;
+    const name = inp.value.trim();
+    if(!name) return;
+    const settings = { ...(state.settings || {}) };
+    const list = [...(settings[key] || [])];
+    const allBuiltIn = [...EXPENSE_CATS, ...INCOME_CATS];
+    if(allBuiltIn.includes(name) || list.includes(name)) return;   // duplicate
+    list.push(name);
+    settings[key] = list;
+    state.settings = settings;
+    save(); render();
+  }
+  const addExpCatBtn = document.getElementById('add-expense-cat-btn');
+  if(addExpCatBtn) addExpCatBtn.addEventListener('click', () => addCustomCat('customExpenseCats', 'new-expense-cat'));
+  const addIncCatBtn = document.getElementById('add-income-cat-btn');
+  if(addIncCatBtn) addIncCatBtn.addEventListener('click', () => addCustomCat('customIncomeCats', 'new-income-cat'));
+
+  document.querySelectorAll('.chip-remove[data-remove-ecat]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cat = btn.dataset.removeEcat;
+      const settings = { ...(state.settings || {}) };
+      settings.customExpenseCats = (settings.customExpenseCats || []).filter(c => c !== cat);
+      state.settings = settings;
+      save(); render();
+    });
+  });
+  document.querySelectorAll('.chip-remove[data-remove-icat]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cat = btn.dataset.removeIcat;
+      const settings = { ...(state.settings || {}) };
+      settings.customIncomeCats = (settings.customIncomeCats || []).filter(c => c !== cat);
+      state.settings = settings;
+      save(); render();
+    });
+  });
+
   // Monthly budgets
   const saveBudgetsBtn = document.getElementById('save-budgets-btn');
   if(saveBudgetsBtn){
@@ -1170,6 +1311,41 @@ function attachPanelHandlers(t){
       save(); render();
     });
   }
+
+  // Recurring entries
+  const addRecBtn = document.getElementById('add-recurring-btn');
+  if(addRecBtn){
+    // Sync the category dropdown when type changes
+    const recTypeSel = document.getElementById('rec-type');
+    const recCatSel = document.getElementById('rec-category');
+    if(recTypeSel && recCatSel){
+      recTypeSel.addEventListener('change', () => {
+        const list = recTypeSel.value === 'income' ? incomeCats() : expenseCats();
+        recCatSel.innerHTML = list.map(c => `<option value="${c}">${c}</option>`).join('');
+      });
+    }
+    addRecBtn.addEventListener('click', () => {
+      const amountEl = document.getElementById('rec-amount');
+      if(!validateFields([[amountEl, amountError(amountEl.value)]])) return;
+      const type = document.getElementById('rec-type').value;
+      const amount = toCents(amountEl.value);
+      const category = document.getElementById('rec-category').value;
+      const dayOfMonth = Math.max(1, Math.min(31, parseInt(document.getElementById('rec-day').value, 10) || 1));
+      const note = document.getElementById('rec-note').value.trim();
+      if(!state.recurring) state.recurring = [];
+      state.recurring.push({ id: uid(), type, amount, category, dayOfMonth, note });
+      save();
+      generateRecurring();   // generate for current month if not yet done
+      render();
+    });
+  }
+  document.querySelectorAll('[data-del-recurring]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.delRecurring;
+      state.recurring = (state.recurring || []).filter(r => r.id !== id);
+      save(); render();
+    });
+  });
 
   const exportJsonBtn = document.getElementById('export-json-btn');
   if(exportJsonBtn){
@@ -1208,7 +1384,7 @@ function attachPanelHandlers(t){
     const typeSel = document.getElementById('edit-type');
     typeSel.addEventListener('change', () => {
       const catSel = document.getElementById('edit-category');
-      const list = typeSel.value === 'income' ? INCOME_CATS : EXPENSE_CATS;
+      const list = typeSel.value === 'income' ? incomeCats() : expenseCats();
       catSel.innerHTML = categoryOptions(typeSel.value, list.includes(catSel.value) ? catSel.value : null);
     });
   }
