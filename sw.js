@@ -1,6 +1,6 @@
 // Service worker — caches the app shell so the tracker works offline.
 // Network-first for all requests: always try the network, fall back to cache.
-const CACHE_NAME = 'ledger-v3';
+const CACHE_NAME = 'ledger-v4';
 
 const APP_SHELL = [
   './',
@@ -12,6 +12,7 @@ const APP_SHELL = [
   './calendar.js',
   './transactions.js',
   './goals.js',
+  './supabase.js',
   './overview.js',
   './app.js',
   './icon.svg',

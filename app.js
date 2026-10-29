@@ -1,6 +1,5 @@
 const STORAGE_PREFIX = 'ledger-data-v1';
-const USERS_KEY = 'ledger-users';
-const SESSION_KEY = 'ledger-current-user';
+function userStorageKey(id){ return STORAGE_PREFIX + ':' + id; }
 const EXPENSE_CATS = ['Food','Housing','Transport','Utilities','Entertainment','Health','Other'];
 const INCOME_CATS = ['Salary','Freelance','Gift','Other'];
 
@@ -17,6 +16,7 @@ let txType = 'expense';
 let dailyType = 'expense';
 
 let currentUser = null;
+let currentUserId = null;
 let authMode = 'signin';
 let authError = '';
 
@@ -48,11 +48,12 @@ function userCurrency(){
 // All on-screen money goes through here so the currency setting applies everywhere.
 function fmt(cents){ return formatMoney(cents, userCurrency()); }
 
-// Auth (PBKDF2, signIn, signUp, renderAuthScreen, attachAuthHandlers) → auth.js
+// Auth (Supabase signIn, signUp, renderAuthScreen, attachAuthHandlers) → auth.js
 
-function signOut(){
+async function signOut(){
+  await sb.auth.signOut();
   currentUser = null;
-  localStorage.removeItem(SESSION_KEY);
+  currentUserId = null;
   state = { transactions: [], goals: [], recurring: [], recurringGenerated: {} };
   activeTab = 'overview';
   authMode = 'signin';
@@ -64,20 +65,33 @@ function signOut(){
   render();
 }
 
-function loadUserData(){
+async function loadUserData(){
   state = { transactions: [], goals: [], recurring: [], recurringGenerated: {} };
+  try {
+    if(currentUserId){
+      const { data } = await sb.from('user_data').select('data').eq('user_id', currentUserId).maybeSingle();
+      if(data && data.data){
+        const { data: migrated, changed } = migrateData(data.data);
+        state = migrated;
+        if(!state.recurring) state.recurring = [];
+        if(!state.recurringGenerated) state.recurringGenerated = {};
+        try{ localStorage.setItem(userStorageKey(currentUserId), JSON.stringify(state)); }catch(e){}
+        if(changed) save();
+        generateRecurring();
+        return;
+      }
+    }
+  } catch(e) {}
   try{
-    const raw = localStorage.getItem(userStorageKey(currentUser));
+    const raw = localStorage.getItem(userStorageKey(currentUserId));
     if(raw){
-      const { data, changed } = migrateData(JSON.parse(raw));
-      state = data;
+      const { data: migrated, changed } = migrateData(JSON.parse(raw));
+      state = migrated;
       if(!state.recurring) state.recurring = [];
       if(!state.recurringGenerated) state.recurringGenerated = {};
       if(changed) save();
     }
-  }catch(e){
-    // no existing data yet
-  }
+  }catch(e){}
   generateRecurring();
 }
 
@@ -90,23 +104,31 @@ function generateRecurring(){
   save();
 }
 
-function restoreSession(){
-  const saved = localStorage.getItem(SESSION_KEY);
-  if(saved){
-    currentUser = saved;
-    loadUserData();
-  }
+async function restoreSession(){
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if(session){
+      currentUser = session.user.email;
+      currentUserId = session.user.id;
+      await loadUserData();
+    }
+  } catch(e) {}
   render();
 }
 
-function save(){
+async function save(){
   if(!currentUser) return;
-  try{
-    state.v = DATA_VERSION;
-    localStorage.setItem(userStorageKey(currentUser), JSON.stringify(state));
-  }catch(e){
-    console.error('Could not save ledger data', e);
-  }
+  state.v = DATA_VERSION;
+  try{ localStorage.setItem(userStorageKey(currentUserId), JSON.stringify(state)); }catch(e){}
+  try {
+    if(currentUserId){
+      await sb.from('user_data').upsert({
+        user_id: currentUserId,
+        data: state,
+        updated_at: new Date().toISOString()
+      });
+    }
+  } catch(e) {}
 }
 
 function addTransaction(data){

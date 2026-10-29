@@ -1,83 +1,37 @@
-// Auth: sign-in, sign-up, password hashing (PBKDF2-SHA256).
-// Globals used: STORAGE_PREFIX, USERS_KEY, SESSION_KEY, authMode, authError,
-//   currentUser, state, escapeHtml, SUN_ICON, MOON_ICON, toggleTheme,
-//   loadUserData, render.
+// Auth via Supabase (email + password).
+// Globals: authMode, authError, currentUser, currentUserId, state,
+//   escapeHtml, SUN_ICON, MOON_ICON, toggleTheme, loadUserData, render, sb.
 
-const PBKDF2_ALGO = 'pbkdf2-sha256';
-const PBKDF2_ITERATIONS = 600000;
-const hasSubtle = () => !!(window.crypto && window.crypto.subtle);
-const toHex = buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-const fromHex = hex => new Uint8Array(hex.match(/../g).map(h => parseInt(h, 16)));
-
-async function pbkdf2Hex(pw, saltHex, iterations){
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: fromHex(saltHex), iterations }, key, 256);
-  return toHex(bits);
-}
-
-async function legacyHash(pw){
-  if(hasSubtle()){
-    try{ return toHex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pw))); }
-    catch(e){ /* fall through */ }
-  }
-  let h = 0;
-  for(let i = 0; i < pw.length; i++){ h = (Math.imul(31, h) + pw.charCodeAt(i)) | 0; }
-  return 'fallback:' + h.toString(16);
-}
-
-async function createPasswordRecord(pw){
-  if(!hasSubtle()) return { passwordHash: await legacyHash(pw) };
-  const salt = toHex(crypto.getRandomValues(new Uint8Array(16)));
-  return { algo: PBKDF2_ALGO, salt, iterations: PBKDF2_ITERATIONS, passwordHash: await pbkdf2Hex(pw, salt, PBKDF2_ITERATIONS) };
-}
-
-async function verifyPassword(pw, rec){
-  if(rec.algo === PBKDF2_ALGO){
-    if(!hasSubtle()) return false;
-    return (await pbkdf2Hex(pw, rec.salt, rec.iterations)) === rec.passwordHash;
-  }
-  return (await legacyHash(pw)) === rec.passwordHash;
-}
-
-function getUsers(){
-  try{ return JSON.parse(localStorage.getItem(USERS_KEY)) || {}; }catch(e){ return {}; }
-}
-function saveUsers(users){
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-function userStorageKey(username){ return `${STORAGE_PREFIX}:${username}`; }
-
-async function signIn(username, password){
-  username = username.trim();
+async function signIn(email, password){
   authError = '';
-  const users = getUsers();
-  const rec = users[username];
-  if(!username || !rec){ authError = 'No account found with that username.'; render(); return; }
-  if(!(await verifyPassword(password, rec))){ authError = 'Incorrect password.'; render(); return; }
-  if(rec.algo !== PBKDF2_ALGO && hasSubtle()){
-    users[username] = await createPasswordRecord(password);
-    saveUsers(users);
-  }
-  currentUser = username;
-  localStorage.setItem(SESSION_KEY, username);
-  loadUserData();
+  email = email.trim();
+  if(!email){ authError = 'Enter your email.'; render(); return; }
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ authError = error.message; render(); return; }
+  currentUser = data.user.email;
+  currentUserId = data.user.id;
+  await loadUserData();
   render();
 }
 
-async function signUp(username, password, confirm){
-  username = username.trim();
+async function signUp(email, password, confirm){
+  email = email.trim();
   authError = '';
-  if(!username){ authError = 'Enter a username.'; render(); return; }
-  if(password.length < 4){ authError = 'Password must be at least 4 characters.'; render(); return; }
+  if(!email){ authError = 'Enter your email.'; render(); return; }
+  if(password.length < 6){ authError = 'Password must be at least 6 characters.'; render(); return; }
   if(password !== confirm){ authError = 'Passwords do not match.'; render(); return; }
-  const users = getUsers();
-  if(users[username]){ authError = 'That username is already taken.'; render(); return; }
-  users[username] = await createPasswordRecord(password);
-  saveUsers(users);
-  currentUser = username;
-  localStorage.setItem(SESSION_KEY, username);
-  loadUserData();
-  render();
+  const { data, error } = await sb.auth.signUp({ email, password });
+  if(error){ authError = error.message; render(); return; }
+  if(data.session){
+    currentUser = data.user.email;
+    currentUserId = data.user.id;
+    await loadUserData();
+    render();
+  } else {
+    authError = 'Check your email to confirm your account, then sign in.';
+    authMode = 'signin';
+    render();
+  }
 }
 
 function renderAuthScreen(){
@@ -97,8 +51,8 @@ function renderAuthScreen(){
         </div>
         <form id="auth-form" novalidate>
           <div class="field" style="margin-bottom:14px;">
-            <label for="auth-username">Username</label>
-            <input type="text" id="auth-username" autocomplete="username" placeholder="e.g. jordan"${authError ? ' aria-invalid="true" aria-describedby="auth-error"' : ''}>
+            <label for="auth-email">Email</label>
+            <input type="email" id="auth-email" autocomplete="email" placeholder="you@example.com"${authError ? ' aria-invalid="true" aria-describedby="auth-error"' : ''}>
           </div>
           <div class="field" style="margin-bottom:14px;">
             <label for="auth-password">Password</label>
@@ -112,7 +66,6 @@ function renderAuthScreen(){
           ${authError ? `<div class="auth-error" id="auth-error" role="alert">${escapeHtml(authError)}</div>` : ''}
           <button type="submit" id="auth-submit" class="btn" style="width:100%;">${isSignup ? 'Create account' : 'Sign in'}</button>
         </form>
-        <div class="auth-note">Stored locally in this browser only — not a real account system.</div>
       </div>
     </div>
   `;
@@ -130,13 +83,13 @@ function attachAuthHandlers(){
   if(form){
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      const username = document.getElementById('auth-username').value;
+      const email = document.getElementById('auth-email').value;
       const password = document.getElementById('auth-password').value;
       if(authMode === 'signup'){
         const confirm = document.getElementById('auth-password-confirm').value;
-        signUp(username, password, confirm);
+        signUp(email, password, confirm);
       } else {
-        signIn(username, password);
+        signIn(email, password);
       }
     });
   }
