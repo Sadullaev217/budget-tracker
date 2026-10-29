@@ -465,6 +465,7 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
 }
 .ledger-line .amt.income{ color: var(--income-text); background: var(--income-bg); }
 .ledger-line .amt.expense{ color: var(--expense-text); background: var(--expense-bg); }
+.ledger-line .amt .equiv{ font-weight: 400; font-size: 0.75rem; opacity: 0.75; }
 .del{
   display:flex; align-items:center; justify-content:center;
   width: 40px; height: 40px; flex-shrink: 0;

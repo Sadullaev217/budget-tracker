@@ -16,6 +16,11 @@ function renderLedgerLine(tx){
   if(tx.id === editingId) return renderEditForm(tx);
   const label = escapeHtml(tx.note || tx.category);
   const kind = tx.type === 'expense' ? 'expense' : 'income';
+  const sign = tx.type === 'expense' ? '-' : '+';
+  const foreign = tx.currency && tx.currency !== userCurrency() && tx.originalAmount;
+  const amtText = foreign
+    ? `${sign}${formatMoney(tx.originalAmount, tx.currency)} <span class="equiv">(${fmt(tx.amount)})</span>`
+    : `${sign}${fmt(tx.amount)}`;
   return `
     <div class="ledger-line">
       <div class="info">
@@ -23,7 +28,7 @@ function renderLedgerLine(tx){
         <span class="cat-tag">${escapeHtml(tx.category)}</span>
       </div>
       <div class="right">
-        <span class="amt ${tx.type}">${tx.type==='expense'?'-':'+'}${fmt(tx.amount)}</span>
+        <span class="amt ${tx.type}">${amtText}</span>
         <button type="button" class="del edit" data-edit="${tx.id}" aria-label="Edit ${label} entry, ${kind} of ${fmt(tx.amount)}">${EDIT_ICON}</button>
         <button type="button" class="del" data-del="${tx.id}" aria-label="Delete ${label} entry, ${kind} of ${fmt(tx.amount)}"><span aria-hidden="true">✕</span></button>
       </div>
@@ -38,6 +43,8 @@ function categoryOptions(type, selected){
 }
 
 function renderEditForm(tx){
+  const foreign = tx.currency && tx.currency !== userCurrency();
+  const editAmt = foreign ? (tx.originalAmount / 100).toFixed(2) : (tx.amount / 100).toFixed(2);
   return `
     <form class="ledger-line editing" id="edit-form" data-edit-form="${tx.id}" aria-label="Edit entry" novalidate>
       <div class="form-row">
@@ -50,7 +57,11 @@ function renderEditForm(tx){
         </div>
         <div class="field">
           <label for="edit-amount">Amount</label>
-          <input type="number" id="edit-amount" step="0.01" min="0" inputmode="decimal" value="${(tx.amount / 100).toFixed(2)}">
+          <input type="number" id="edit-amount" step="0.01" min="0" inputmode="decimal" value="${editAmt}">
+        </div>
+        <div class="field" style="flex: 0 0 80px;">
+          <label for="edit-currency">Currency</label>
+          <select id="edit-currency">${CURRENCIES.map(c => `<option value="${c}"${c === (tx.currency || userCurrency()) ? ' selected' : ''}>${c}</option>`).join('')}</select>
         </div>
         <div class="field">
           <label for="edit-category">Category</label>
@@ -59,6 +70,12 @@ function renderEditForm(tx){
         <div class="field">
           <label for="edit-date">Date</label>
           <input type="date" id="edit-date" value="${tx.date}">
+        </div>
+      </div>
+      <div class="form-row edit-equiv-row"${foreign ? '' : ' style="display:none;"'}>
+        <div class="field">
+          <label for="edit-equiv">Equivalent in ${userCurrency()}</label>
+          <input type="number" id="edit-equiv" step="0.01" min="0" inputmode="decimal" value="${foreign ? (tx.amount / 100).toFixed(2) : ''}">
         </div>
       </div>
       <div class="form-row">
@@ -75,7 +92,7 @@ function renderEditForm(tx){
   `;
 }
 
-const EDIT_FIELDS = ['edit-type', 'edit-amount', 'edit-category', 'edit-date', 'edit-note'];
+const EDIT_FIELDS = ['edit-type', 'edit-amount', 'edit-currency', 'edit-equiv', 'edit-category', 'edit-date', 'edit-note'];
 function startEdit(id){
   clearFields(EDIT_FIELDS);
   editingId = id;
@@ -94,13 +111,25 @@ function saveEdit(){
   if(!tx){ stopEdit(); return; }
   const amountEl = document.getElementById('edit-amount');
   const dateEl = document.getElementById('edit-date');
-  const ok = validateFields([
+  const curSel = document.getElementById('edit-currency');
+  const equivEl = document.getElementById('edit-equiv');
+  const isForeign = curSel && curSel.value !== userCurrency();
+  const checks = [
     [amountEl, amountError(amountEl.value)],
     [dateEl, /^\d{4}-\d{2}-\d{2}$/.test(dateEl.value) ? '' : 'Choose a date.']
-  ]);
-  if(!ok) return;
+  ];
+  if(isForeign) checks.push([equivEl, amountError(equivEl.value, 'Enter the equivalent amount.')]);
+  if(!validateFields(checks)) return;
   tx.type = document.getElementById('edit-type').value === 'income' ? 'income' : 'expense';
-  tx.amount = toCents(amountEl.value);
+  if(isForeign){
+    tx.originalAmount = toCents(amountEl.value);
+    tx.currency = curSel.value;
+    tx.amount = toCents(equivEl.value);
+  } else {
+    tx.amount = toCents(amountEl.value);
+    delete tx.originalAmount;
+    delete tx.currency;
+  }
   tx.category = document.getElementById('edit-category').value;
   tx.date = dateEl.value;
   tx.note = document.getElementById('edit-note').value.trim();
@@ -288,6 +317,10 @@ function renderTransactions(t){
           <label for="tx-amount">Amount</label>
           <input type="number" id="tx-amount" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
         </div>
+        <div class="field" style="flex: 0 0 80px;">
+          <label for="tx-currency">Currency</label>
+          <select id="tx-currency">${CURRENCIES.map(c => `<option value="${c}"${c === userCurrency() ? ' selected' : ''}>${c}</option>`).join('')}</select>
+        </div>
         <div class="field">
           <label for="tx-category">Category</label>
           <select id="tx-category">${catOptions}</select>
@@ -295,6 +328,12 @@ function renderTransactions(t){
         <div class="field">
           <label for="tx-date">Date</label>
           <input type="date" id="tx-date" value="${todayISO()}">
+        </div>
+      </div>
+      <div class="form-row tx-equiv-row" style="display:none;">
+        <div class="field">
+          <label for="tx-equiv">Equivalent in ${userCurrency()}</label>
+          <input type="number" id="tx-equiv" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
         </div>
       </div>
       <div class="form-row">
@@ -483,17 +522,39 @@ function attachTransactionHandlers(t){
   document.querySelectorAll('.toggle-btn[data-type]').forEach(btn => {
     btn.addEventListener('click', () => { txType = btn.dataset.type; render(); });
   });
+  const txCurrencySel = document.getElementById('tx-currency');
+  if(txCurrencySel){
+    txCurrencySel.addEventListener('change', () => {
+      const row = document.querySelector('.tx-equiv-row');
+      if(row) row.style.display = txCurrencySel.value !== userCurrency() ? '' : 'none';
+    });
+  }
   const addTxBtn = document.getElementById('add-tx-btn');
   if(addTxBtn){
     addTxBtn.addEventListener('click', () => {
       const amountEl = document.getElementById('tx-amount');
-      if(!validateFields([[amountEl, amountError(amountEl.value)]])) return;
-      const amount = toCents(amountEl.value);
+      const curSel = document.getElementById('tx-currency');
+      const equivEl = document.getElementById('tx-equiv');
+      const isForeign = curSel && curSel.value !== userCurrency();
+      const checks = [[amountEl, amountError(amountEl.value)]];
+      if(isForeign) checks.push([equivEl, amountError(equivEl.value, 'Enter the equivalent amount.')]);
+      if(!validateFields(checks)) return;
       const category = document.getElementById('tx-category').value;
       const date = document.getElementById('tx-date').value || todayISO();
       const note = document.getElementById('tx-note').value.trim();
-      clearFields(['tx-amount', 'tx-category', 'tx-date', 'tx-note']);
-      addTransaction({ type: txType, amount, category, date, note });
+      const entry = { type: txType, category, date, note };
+      if(isForeign){
+        entry.originalAmount = toCents(amountEl.value);
+        entry.currency = curSel.value;
+        entry.amount = toCents(equivEl.value);
+      } else {
+        entry.amount = toCents(amountEl.value);
+      }
+      clearFields(['tx-amount', 'tx-equiv', 'tx-category', 'tx-date', 'tx-note']);
+      if(curSel) curSel.value = userCurrency();
+      const row = document.querySelector('.tx-equiv-row');
+      if(row) row.style.display = 'none';
+      addTransaction(entry);
       pendingFocus = '#tx-amount';
     });
   }
@@ -674,5 +735,12 @@ function attachTransactionHandlers(t){
       const list = typeSel.value === 'income' ? incomeCats() : expenseCats();
       catSel.innerHTML = categoryOptions(typeSel.value, list.includes(catSel.value) ? catSel.value : null);
     });
+    const editCurSel = document.getElementById('edit-currency');
+    if(editCurSel){
+      editCurSel.addEventListener('change', () => {
+        const row = document.querySelector('.edit-equiv-row');
+        if(row) row.style.display = editCurSel.value !== userCurrency() ? '' : 'none';
+      });
+    }
   }
 }
