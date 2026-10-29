@@ -393,6 +393,9 @@ function renderOverview(t){
   }).join('') : `<div class="empty">No savings goals yet. Set one from the Savings Goals tab.</div>`;
 
   const chartSeries = monthlyExpenseSeries(state.transactions, new Date());
+  const ieSeries = monthlyIncomeExpenseSeries(state.transactions, new Date());
+  const balSeries = balanceOverTime(state.transactions, new Date());
+  const hasBudgets = Object.keys(budgets).some(k => budgets[k] > 0);
 
   return `
     <div class="bento-grid">
@@ -415,9 +418,16 @@ function renderOverview(t){
       <div class="tile tile-chart">
         ${renderChart(chartSeries)}
       </div>
+      <div class="tile tile-ie-chart">
+        ${renderIncomeExpenseChart(ieSeries)}
+      </div>
       <div class="tile tile-cat-chart">
         <h2>Expenses by category</h2>
         ${renderCategoryChart(t.byCategory)}
+      </div>
+      ${hasBudgets ? `<div class="tile tile-burndown">${renderBudgetBurndown(budgets, monthSpend)}</div>` : ''}
+      <div class="tile tile-trend">
+        ${renderBalanceTrend(balSeries)}
       </div>
       <div class="tile tile-goals">
         <h2>Savings goals</h2>

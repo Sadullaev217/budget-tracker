@@ -182,6 +182,59 @@ function monthlyExpenseSeries(transactions, now, months = 6){
   }));
 }
 
+function monthlyIncomeExpenseSeries(transactions, now, months = 6){
+  const inc = {}, exp = {};
+  transactions.forEach(tx => {
+    const key = String(tx.date).slice(0, 7);
+    if(tx.type === 'income') inc[key] = (inc[key] || 0) + tx.amount;
+    else exp[key] = (exp[key] || 0) + tx.amount;
+  });
+  const keys = [];
+  for(let i = months - 1; i >= 0; i--){
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    keys.push({ d, key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` });
+  }
+  const spansYears = keys[0].d.getFullYear() !== keys[keys.length - 1].d.getFullYear();
+  return keys.map(({ d, key }) => ({
+    key,
+    label: spansYears
+      ? d.toLocaleString(undefined, { month: 'short', year: '2-digit' })
+      : d.toLocaleString(undefined, { month: 'short' }),
+    income: inc[key] || 0,
+    expense: exp[key] || 0
+  }));
+}
+
+function balanceOverTime(transactions, now, months = 6){
+  const byMonth = {};
+  transactions.forEach(tx => {
+    const key = String(tx.date).slice(0, 7);
+    if(!byMonth[key]) byMonth[key] = 0;
+    byMonth[key] += tx.type === 'income' ? tx.amount : -tx.amount;
+  });
+  const keys = [];
+  for(let i = months - 1; i >= 0; i--){
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    keys.push({ d, key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` });
+  }
+  const spansYears = keys[0].d.getFullYear() !== keys[keys.length - 1].d.getFullYear();
+  let running = 0;
+  transactions.forEach(tx => {
+    const key = String(tx.date).slice(0, 7);
+    if(key < keys[0].key) running += tx.type === 'income' ? tx.amount : -tx.amount;
+  });
+  return keys.map(({ d, key }) => {
+    running += byMonth[key] || 0;
+    return {
+      key,
+      label: spansYears
+        ? d.toLocaleString(undefined, { month: 'short', year: '2-digit' })
+        : d.toLocaleString(undefined, { month: 'short' }),
+      balance: running
+    };
+  });
+}
+
 function mergeCats(builtIn, custom){
   if(!custom || !custom.length) return builtIn;
   return [...builtIn, ...custom.filter(c => !builtIn.includes(c))];
@@ -211,5 +264,5 @@ function isOverBudget(spent, budget){
 }
 
 if(typeof module !== 'undefined' && module.exports){
-  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, mergeCats, generateRecurringEntries, isOverBudget };
+  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, monthlyIncomeExpenseSeries, balanceOverTime, mergeCats, generateRecurringEntries, isOverBudget };
 }

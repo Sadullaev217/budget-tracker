@@ -160,7 +160,9 @@ body{
   grid-template-areas:
     "balance balance income expense"
     "balance balance categories categories"
-    "chart chart chart chart"
+    "chart chart iechart iechart"
+    "catchart catchart trend trend"
+    "burndown burndown burndown burndown"
     "goals goals goals goals";
   gap: 16px;
   margin-bottom: 18px;
@@ -181,6 +183,10 @@ body{
 .tile-expense{ grid-area: expense; }
 .tile-categories{ grid-area: categories; }
 .tile-chart{ grid-area: chart; position: relative; }
+.tile-ie-chart{ grid-area: iechart; position: relative; }
+.tile-cat-chart{ grid-area: catchart; }
+.tile-trend{ grid-area: trend; position: relative; }
+.tile-burndown{ grid-area: burndown; }
 .tile-goals{ grid-area: goals; }
 
 .tile-label{
@@ -661,6 +667,10 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
       "expense"
       "categories"
       "chart"
+      "iechart"
+      "catchart"
+      "burndown"
+      "trend"
       "goals";
   }
   .goal-grid{ grid-template-columns: 1fr; }
@@ -718,6 +728,27 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
 .chart-legend-item{ display: flex; align-items: center; gap: 6px; }
 .legend-dot{ width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .legend-pct{ opacity: 0.6; margin-left: 4px; }
+
+/* Income vs Expense chart */
+.chart-legend-inline{ display: flex; align-items: center; gap: 6px; font-size: 0.8rem; opacity: 0.7; margin-bottom: 6px; }
+.chart-legend-inline .legend-dot{ display: inline-block; }
+
+/* Budget burn-down */
+.burn-row{ margin-bottom: 14px; }
+.burn-row:last-child{ margin-bottom: 0; }
+.burn-header{ display: flex; justify-content: space-between; margin-bottom: 4px; }
+.burn-cat{ font-weight: 600; font-size: 0.88rem; }
+.burn-nums{ font-size: 0.82rem; opacity: 0.7; }
+.burn-row .bar-track{ position: relative; }
+.burn-marker{ position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--fg); opacity: 0.45; border-radius: 1px; }
+.burn-status{ font-size: 0.75rem; opacity: 0.6; margin-top: 3px; }
+.bar-fill.green{ background: var(--income-text); }
+.bar-fill.amber{ background: #fbbf24; }
+.bar-fill.red{ background: var(--expense-text); }
+.burn-over .burn-nums{ color: var(--expense-text); font-weight: 600; }
+
+/* Balance trend line chart */
+.trend-chart-wrap .chart-baseline{ stroke-dasharray: 4 3; opacity: 0.3; }
 
 /* Goal linked category */
 .goal-linked{ font-size: 0.78rem; opacity: 0.65; margin-top: 4px; }
