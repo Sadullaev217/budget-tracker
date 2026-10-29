@@ -13,6 +13,7 @@ function incomeCats(){
 }
 let activeTab = 'overview';
 let overviewRange = 'month';
+let customRange = { from: '', to: '' };
 let txType = 'expense';
 let dailyType = 'expense';
 
@@ -423,6 +424,10 @@ function attachPanelHandlers(t){
   document.querySelectorAll('[data-range]').forEach(btn => {
     btn.addEventListener('click', () => { overviewRange = btn.dataset.range; render(); });
   });
+  const crFrom = document.getElementById('custom-range-from');
+  const crTo = document.getElementById('custom-range-to');
+  if(crFrom) crFrom.addEventListener('change', () => { customRange.from = crFrom.value; render(); });
+  if(crTo) crTo.addEventListener('change', () => { customRange.to = crTo.value; render(); });
 
   attachChartHandlers();
   attachCalendarHandlers();

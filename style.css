@@ -167,6 +167,11 @@ body{
   background: var(--navy); color: var(--on-solid); border-color: var(--navy);
 }
 .tile-range{ font-size: 0.7rem; font-weight: 400; opacity: 0.6; }
+.custom-range-inputs{
+  display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap;
+}
+.custom-range-inputs .field{ flex: 1; min-width: 120px; }
+.custom-range-inputs label{ font-size: 0.72rem; margin-bottom: 2px; }
 
 /* Budget alerts */
 .budget-alerts{ margin-bottom: 16px; }

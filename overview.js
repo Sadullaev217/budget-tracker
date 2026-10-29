@@ -2,9 +2,15 @@
 
 function renderOverview(){
   const now = new Date();
-  const { from, to } = dateRange(overviewRange, now);
+  let from, to;
+  if(overviewRange === 'custom'){
+    from = customRange.from || '';
+    to = customRange.to || '';
+  } else {
+    ({ from, to } = dateRange(overviewRange, now));
+  }
   const filtered = from
-    ? state.transactions.filter(tx => tx.date >= from && tx.date <= to)
+    ? state.transactions.filter(tx => (!from || tx.date >= from) && (!to || tx.date <= to))
     : state.transactions;
   const t = sumTotals(filtered);
 
@@ -19,11 +25,23 @@ function renderOverview(){
     { key: 'lastmonth', label: 'Last month' },
     { key: 'quarter', label: 'Quarter' },
     { key: 'year', label: 'Year' },
-    { key: 'all', label: 'All time' }
+    { key: 'all', label: 'All time' },
+    { key: 'custom', label: 'Custom' }
   ];
+  const customInputs = overviewRange === 'custom' ? `
+    <div class="custom-range-inputs">
+      <div class="field">
+        <label for="custom-range-from">From</label>
+        <input type="date" id="custom-range-from" value="${customRange.from}">
+      </div>
+      <div class="field">
+        <label for="custom-range-to">To</label>
+        <input type="date" id="custom-range-to" value="${customRange.to}">
+      </div>
+    </div>` : '';
   const rangePicker = `<div class="range-picker" role="group" aria-label="Date range">${
     RANGES.map(r => `<button type="button" class="range-btn${overviewRange === r.key ? ' active' : ''}" data-range="${r.key}">${r.label}</button>`).join('')
-  }</div>`;
+  }</div>${customInputs}`;
 
   // Budget alerts (always current month, independent of date range)
   const ALERT_THRESHOLD = 0.8;
@@ -74,7 +92,12 @@ function renderOverview(){
   const balSeries = balanceOverTime(filtered, now);
   const hasBudgets = Object.keys(budgets).some(k => budgets[k] > 0);
 
-  const rangeLabel = RANGES.find(r => r.key === overviewRange).label;
+  let rangeLabel = RANGES.find(r => r.key === overviewRange).label;
+  if(overviewRange === 'custom' && customRange.from && customRange.to){
+    rangeLabel = customRange.from + ' — ' + customRange.to;
+  } else if(overviewRange === 'custom'){
+    rangeLabel = customRange.from || customRange.to || 'Custom';
+  }
 
   return `
     ${rangePicker}
