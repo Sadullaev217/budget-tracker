@@ -842,8 +842,25 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
 /* Balance trend line chart */
 .trend-chart-wrap .chart-baseline{ stroke-dasharray: 4 3; opacity: 0.3; }
 
+/* Spending trend insight */
+.trend-insight{
+  padding: 10px 16px; margin-bottom: 12px;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  font-size: 0.88rem; color: var(--text-dim);
+}
+
 /* Goal linked category */
 .goal-linked{ font-size: 0.78rem; opacity: 0.65; margin-top: 4px; }
+
+/* Goal deadline / pace */
+.goal-deadline{ font-size: 0.78rem; color: var(--text-dim); margin-top: 4px; }
+.goal-deadline.on-track{ color: var(--income-text); }
+.goal-deadline.behind{ color: var(--expense-text); }
+
+/* Drag to reorder goals */
+.goal-card[draggable="true"]{ cursor: grab; }
+.goal-card.dragging{ opacity: 0.4; }
+.goal-card.drag-over{ border-top: 3px solid var(--navy); }
 
 /* PWA update banner */
 .update-banner{

@@ -72,7 +72,7 @@ function renderOverview(){
     <div class="cat-row cat-link${over ? ' over-budget-row' : ''}" data-cat-link="${escapeHtml(cat)}" role="button" tabindex="0" aria-label="View ${escapeHtml(cat)} transactions">
       <div class="cat-top"><span>${escapeHtml(cat)}</span><span class="amt">${fmt(amt)}</span></div>
       ${budgetInfo}
-      <div class="bar-track"><div class="bar-fill navy" style="width:${Math.round((amt/maxCat)*100)}%"></div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round((amt/maxCat)*100)}%;background:${categoryColor(cat)}"></div></div>
     </div>`;
   }).join('') : `<div class="empty">No expenses logged yet. Add one from the Transactions tab.</div>`;
 
@@ -97,6 +97,22 @@ function renderOverview(){
     : null;
   const txCount = filtered.length;
 
+  // Spending trends — compare this month vs last month
+  const thisMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastMonthPrefix = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
+  const thisMonthExp = state.transactions.filter(tx => tx.type === 'expense' && tx.date.startsWith(thisMonthPrefix)).reduce((s, tx) => s + tx.amount, 0);
+  const lastMonthExp = state.transactions.filter(tx => tx.type === 'expense' && tx.date.startsWith(lastMonthPrefix)).reduce((s, tx) => s + tx.amount, 0);
+  let trendText = '';
+  if(lastMonthExp > 0 && thisMonthExp > 0){
+    const change = Math.round(((thisMonthExp - lastMonthExp) / lastMonthExp) * 100);
+    if(change > 0) trendText = `Spending is up ${change}% vs last month (${fmt(thisMonthExp)} vs ${fmt(lastMonthExp)}).`;
+    else if(change < 0) trendText = `Spending is down ${Math.abs(change)}% vs last month (${fmt(thisMonthExp)} vs ${fmt(lastMonthExp)}).`;
+    else trendText = `Spending is flat vs last month (${fmt(thisMonthExp)}).`;
+  } else if(thisMonthExp > 0){
+    trendText = `${fmt(thisMonthExp)} spent so far this month.`;
+  }
+
   const chartSeries = monthlyExpenseSeries(filtered, now);
   const ieSeries = monthlyIncomeExpenseSeries(filtered, now);
   const balSeries = balanceOverTime(filtered, now);
@@ -112,6 +128,7 @@ function renderOverview(){
   return `
     ${rangePicker}
     ${alertsHtml}
+    ${trendText ? `<div class="trend-insight">${trendText}</div>` : ''}
     <div class="bento-grid">
       <div class="tile tile-balance">
         <div class="tile-label">Balance <span class="tile-range">${escapeHtml(rangeLabel)}</span></div>

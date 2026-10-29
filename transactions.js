@@ -339,7 +339,7 @@ function renderTransactions(t){
       <div class="form-row">
         <div class="field" style="flex: 3;">
           <label for="tx-note">Note (optional)</label>
-          <input type="text" id="tx-note" placeholder="e.g. groceries at the market">
+          <input type="text" id="tx-note" placeholder="e.g. groceries at the market" list="note-suggestions">
         </div>
       </div>
       <button class="btn" id="add-tx-btn">Add entry</button>
@@ -452,6 +452,7 @@ function renderTransactions(t){
       </div>` : ''}
     </div>
     ${renderRecurringPreview()}
+    <datalist id="note-suggestions">${Array.from(new Set(state.transactions.map(t => t.note).filter(Boolean))).slice(0, 50).map(n => `<option value="${escapeHtml(n)}">`).join('')}</datalist>
     <div class="card">
       <h2>Backup</h2>
       <p class="card-help">Your data lives only in this browser. Export a backup so clearing browser data can't wipe it.</p>

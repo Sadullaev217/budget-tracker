@@ -493,6 +493,26 @@ function showInstallBanner(){
   });
 }
 
+// Keyboard shortcuts (only when not in an input/form)
+document.addEventListener('keydown', (e) => {
+  if(!currentUser) return;
+  const tag = (document.activeElement || {}).tagName;
+  if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  switch(e.key){
+    case '1': activeTab = 'overview'; render(); break;
+    case '2': activeTab = 'transactions'; pendingFocus = '#tx-amount'; render(); break;
+    case '3': activeTab = 'daily'; render(); break;
+    case '4': activeTab = 'goals'; render(); break;
+    case 'n': case 'N':
+      if(activeTab !== 'transactions'){ activeTab = 'transactions'; }
+      pendingFocus = '#tx-amount'; render(); break;
+    case 'Escape':
+      if(editingId){ editingId = null; render(); }
+      break;
+  }
+});
+
 // Handle PWA shortcut query params
 (function(){
   var params = new URLSearchParams(window.location.search);

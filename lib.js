@@ -259,6 +259,15 @@ function generateRecurringEntries(recurring, recurringGenerated, now, idFn){
   return { entries, generated: newGenerated };
 }
 
+const CAT_COLORS = ['#f87171','#60a5fa','#34d399','#fbbf24','#a78bfa','#fb923c','#f472b6','#38bdf8','#4ade80','#facc15','#e879f9','#2dd4bf','#f97316','#818cf8'];
+const catColorCache = new Map();
+function categoryColor(cat){
+  if(catColorCache.has(cat)) return catColorCache.get(cat);
+  const color = CAT_COLORS[catColorCache.size % CAT_COLORS.length];
+  catColorCache.set(cat, color);
+  return color;
+}
+
 function isOverBudget(spent, budget){
   return budget > 0 && spent > budget;
 }
@@ -284,5 +293,5 @@ function dateRange(range, now){
 }
 
 if(typeof module !== 'undefined' && module.exports){
-  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, monthlyIncomeExpenseSeries, balanceOverTime, mergeCats, generateRecurringEntries, isOverBudget, dateRange };
+  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, CAT_COLORS, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, monthlyIncomeExpenseSeries, balanceOverTime, mergeCats, generateRecurringEntries, isOverBudget, dateRange, categoryColor };
 }

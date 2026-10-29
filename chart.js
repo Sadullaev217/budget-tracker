@@ -56,7 +56,6 @@ function renderCategoryChart(byCategory){
   const entries = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
   if(!entries.length) return '<div class="empty">No expenses to chart yet.</div>';
   const total = entries.reduce((s, [, v]) => s + v, 0);
-  const colors = ['#f87171','#60a5fa','#34d399','#fbbf24','#a78bfa','#fb923c','#f472b6','#38bdf8','#4ade80','#facc15'];
   const R = 70, cx = 90, cy = 90;
   let startAngle = -Math.PI / 2;
   const slices = entries.map(([cat, amt], i) => {
@@ -66,7 +65,7 @@ function renderCategoryChart(byCategory){
     const large = angle > Math.PI ? 1 : 0;
     const x1 = cx + R * Math.cos(startAngle), y1 = cy + R * Math.sin(startAngle);
     const x2 = cx + R * Math.cos(endAngle), y2 = cy + R * Math.sin(endAngle);
-    const color = colors[i % colors.length];
+    const color = categoryColor(cat);
     const path = entries.length === 1
       ? `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${color}" opacity="0.85"/>`
       : `<path d="M${cx},${cy} L${x1},${y1} A${R},${R} 0 ${large} 1 ${x2},${y2} Z" fill="${color}" opacity="0.85"/>`;
