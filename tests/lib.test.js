@@ -1,7 +1,7 @@
 // Run with: node --test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, monthlyIncomeExpenseSeries, balanceOverTime, mergeCats, generateRecurringEntries, isOverBudget } = require('../lib.js');
+const { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, monthlyIncomeExpenseSeries, balanceOverTime, mergeCats, generateRecurringEntries, isOverBudget, dateRange } = require('../lib.js');
 
 test('toCents converts dollar strings to integer cents', () => {
   assert.equal(toCents('12.34'), 1234);
@@ -317,6 +317,29 @@ test('transactionsToCSV handles special characters in notes', () => {
   ]);
   const lines = csv.trim().split('\r\n');
   assert.equal(lines[1], '"2026-10-01","expense","Food","5.00","\''+'+tabbed\tnote"');
+});
+
+test('dateRange returns correct bounds for each range type', () => {
+  const now = new Date(2026, 9, 15); // Oct 15, 2026
+  const month = dateRange('month', now);
+  assert.equal(month.from, '2026-10-01');
+  assert.equal(month.to, '2026-10-15');
+
+  const last = dateRange('lastmonth', now);
+  assert.equal(last.from, '2026-09-01');
+  assert.equal(last.to, '2026-09-30');
+
+  const quarter = dateRange('quarter', now);
+  assert.equal(quarter.from, '2026-10-01');
+  assert.equal(quarter.to, '2026-10-15');
+
+  const year = dateRange('year', now);
+  assert.equal(year.from, '2026-01-01');
+  assert.equal(year.to, '2026-10-15');
+
+  const all = dateRange('all', now);
+  assert.equal(all.from, '');
+  assert.equal(all.to, '');
 });
 
 test('parseBackup round-trip preserves recurring, budgets, and custom categories', () => {

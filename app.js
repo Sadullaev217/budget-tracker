@@ -12,6 +12,7 @@ function incomeCats(){
   return mergeCats(INCOME_CATS, state.settings && state.settings.customIncomeCats);
 }
 let activeTab = 'overview';
+let overviewRange = 'month';
 let txType = 'expense';
 let dailyType = 'expense';
 
@@ -378,7 +379,7 @@ function render(){
   if(signOutBtn) signOutBtn.addEventListener('click', signOut);
 
   const panels = document.getElementById('panels');
-  if(activeTab === 'overview') panels.innerHTML = renderOverview(t);
+  if(activeTab === 'overview') panels.innerHTML = renderOverview();
   else if(activeTab === 'transactions') panels.innerHTML = renderTransactions(t);
   else if(activeTab === 'daily') panels.innerHTML = renderDaily();
   else panels.innerHTML = renderGoals();
@@ -417,6 +418,10 @@ function attachPanelHandlers(t){
       const primary = scope && scope.querySelector('button.btn');
       if(primary) primary.click();
     });
+  });
+
+  document.querySelectorAll('[data-range]').forEach(btn => {
+    btn.addEventListener('click', () => { overviewRange = btn.dataset.range; render(); });
   });
 
   attachChartHandlers();

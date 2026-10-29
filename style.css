@@ -153,6 +153,37 @@ body{
 .panel.active{ display:block; animation: fade .25s ease; }
 @keyframes fade{ from{opacity:0; transform: translateY(4px);} to{opacity:1; transform:none;} }
 
+/* Range picker */
+.range-picker{
+  display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.range-btn{
+  background: var(--surface); border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 20px; padding: 6px 14px; font-size: 0.78rem; font-weight: 500;
+  cursor: pointer; transition: all .15s ease;
+}
+.range-btn:hover{ background: var(--surface-2); color: var(--text); }
+.range-btn.active{
+  background: var(--navy); color: var(--on-solid); border-color: var(--navy);
+}
+.tile-range{ font-size: 0.7rem; font-weight: 400; opacity: 0.6; }
+
+/* Budget alerts */
+.budget-alerts{ margin-bottom: 16px; }
+.budget-alerts h3{ font-size: 0.82rem; font-weight: 600; margin: 0 0 8px; color: var(--text-dim); }
+.budget-alert{
+  display: flex; align-items: center; gap: 6px; padding: 10px 14px;
+  border-radius: var(--radius-sm); font-size: 0.8rem; margin-bottom: 6px;
+}
+.budget-alert.warn{
+  background: rgba(245,158,11,0.12); color: #92400E; border-left: 3px solid #F59E0B;
+}
+.budget-alert.over{
+  background: var(--expense-bg); color: var(--expense-text); border-left: 3px solid var(--expense);
+}
+:root[data-theme="dark"] .budget-alert.warn{ color: #FBBF24; }
+.alert-cat{ font-weight: 600; }
+
 /* Bento grid — Overview */
 .bento-grid{
   display: grid;

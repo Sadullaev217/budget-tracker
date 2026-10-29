@@ -263,6 +263,26 @@ function isOverBudget(spent, budget){
   return budget > 0 && spent > budget;
 }
 
+function dateRange(range, now){
+  const y = now.getFullYear(), m = now.getMonth();
+  if(range === 'month'){
+    return { from: `${y}-${String(m + 1).padStart(2, '0')}-01`, to: localISO(now) };
+  }
+  if(range === 'lastmonth'){
+    const first = new Date(y, m - 1, 1);
+    const last = new Date(y, m, 0);
+    return { from: localISO(first), to: localISO(last) };
+  }
+  if(range === 'quarter'){
+    const qStart = new Date(y, Math.floor(m / 3) * 3, 1);
+    return { from: localISO(qStart), to: localISO(now) };
+  }
+  if(range === 'year'){
+    return { from: `${y}-01-01`, to: localISO(now) };
+  }
+  return { from: '', to: '' };
+}
+
 if(typeof module !== 'undefined' && module.exports){
-  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, monthlyIncomeExpenseSeries, balanceOverTime, mergeCats, generateRecurringEntries, isOverBudget };
+  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, monthlyIncomeExpenseSeries, balanceOverTime, mergeCats, generateRecurringEntries, isOverBudget, dateRange };
 }
