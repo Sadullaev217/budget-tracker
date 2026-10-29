@@ -22,12 +22,13 @@ function renderLedgerLine(tx){
     ? `${sign}${formatMoney(tx.originalAmount, tx.currency)} <span class="equiv">(${fmt(tx.amount)})</span>`
     : `${sign}${fmt(tx.amount)}`;
   const tagHtml = tx.tags && tx.tags.length ? tx.tags.map(t => `<span class="tx-tag">#${escapeHtml(t)}</span>`).join('') : '';
+  const acctHtml = tx.account ? `<span class="tx-tag acct-tag">${escapeHtml(tx.account)}</span>` : '';
   return `
     <div class="ledger-line">
       <div class="info">
         <span class="desc">${label}</span>
         <span class="cat-tag">${escapeHtml(tx.category)}</span>
-        ${tagHtml}
+        ${acctHtml}${tagHtml}
       </div>
       <div class="right">
         <span class="amt ${tx.type}">${amtText}</span>
@@ -73,6 +74,10 @@ function renderEditForm(tx){
           <label for="edit-date">Date</label>
           <input type="date" id="edit-date" value="${tx.date}">
         </div>
+        <div class="field" style="flex: 0 0 120px;">
+          <label for="edit-account">Account</label>
+          <select id="edit-account">${accounts().map(a => `<option value="${escapeHtml(a)}"${a === (tx.account || accounts()[0]) ? ' selected' : ''}>${escapeHtml(a)}</option>`).join('')}</select>
+        </div>
       </div>
       <div class="form-row edit-equiv-row"${foreign ? '' : ' style="display:none;"'}>
         <div class="field">
@@ -98,7 +103,7 @@ function renderEditForm(tx){
   `;
 }
 
-const EDIT_FIELDS = ['edit-type', 'edit-amount', 'edit-currency', 'edit-equiv', 'edit-category', 'edit-date', 'edit-note', 'edit-tags'];
+const EDIT_FIELDS = ['edit-type', 'edit-amount', 'edit-currency', 'edit-equiv', 'edit-category', 'edit-date', 'edit-note', 'edit-tags', 'edit-account'];
 function startEdit(id){
   clearFields(EDIT_FIELDS);
   editingId = id;
@@ -139,6 +144,7 @@ function saveEdit(){
   tx.category = document.getElementById('edit-category').value;
   tx.date = dateEl.value;
   tx.note = document.getElementById('edit-note').value.trim();
+  tx.account = (document.getElementById('edit-account') || {}).value || accounts()[0];
   const editTagsRaw = (document.getElementById('edit-tags') || {}).value || '';
   const editTags = editTagsRaw.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean);
   if(editTags.length) tx.tags = editTags; else delete tx.tags;
@@ -342,6 +348,10 @@ function renderTransactions(t){
           <label for="tx-date">Date</label>
           <input type="date" id="tx-date" value="${todayISO()}">
         </div>
+        <div class="field" style="flex: 0 0 120px;">
+          <label for="tx-account">Account</label>
+          <select id="tx-account">${accounts().map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('')}</select>
+        </div>
       </div>
       <div class="form-row tx-equiv-row" style="display:none;">
         <div class="field">
@@ -359,7 +369,18 @@ function renderTransactions(t){
           <input type="text" id="tx-tags" placeholder="#trip #tax">
         </div>
       </div>
-      <button class="btn" id="add-tx-btn">Add entry</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button class="btn" id="add-tx-btn">Add entry</button>
+        <button class="btn ghost" id="save-template-btn" style="font-size:0.82rem;">Save as template</button>
+      </div>
+      ${(function(){
+        const tpls = (state.settings && state.settings.templates) || [];
+        if(!tpls.length) return '';
+        return `<div class="template-chips" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
+          <span style="font-size:0.8rem;opacity:0.7;align-self:center;">Quick add:</span>
+          ${tpls.map((tp, i) => `<button type="button" class="btn ghost template-chip" data-tpl-idx="${i}" style="font-size:0.8rem;padding:4px 10px;">${escapeHtml(tp.note || tp.category)} (${tp.type === 'expense' ? '-' : '+'}${fmt(tp.amount)})</button><button type="button" class="chip-remove" data-remove-tpl="${i}" aria-label="Remove template" style="margin-left:-4px;">✕</button>`).join('')}
+        </div>`;
+      })()}
     </div>
     <div class="card">
       <h2>Entries</h2>
@@ -371,6 +392,29 @@ function renderTransactions(t){
         <span>${fmt(shownTotals.balance)}</span>
       </div>` : ''}
     </div>
+    ${(function(){
+      const trash = state.trash || [];
+      if(!trash.length) return '';
+      return `<div class="card">
+        <h2>Trash (${trash.length})</h2>
+        <p class="card-help">Deleted entries are kept for 30 days. <button type="button" class="link-btn" id="empty-trash-btn">Empty trash</button></p>
+        ${trash.slice().reverse().map(tx => {
+          const sign = tx.type === 'expense' ? '-' : '+';
+          return `<div class="ledger-line">
+            <div class="info">
+              <span class="desc">${escapeHtml(tx.note || tx.category)}</span>
+              <span class="cat-tag">${escapeHtml(tx.category)}</span>
+              <span style="font-size:0.75rem;opacity:0.6;">${tx.date}</span>
+            </div>
+            <div class="right">
+              <span class="amt ${tx.type}">${sign}${fmt(tx.amount)}</span>
+              <button type="button" class="btn ghost" data-restore="${tx.id}" style="font-size:0.75rem;padding:2px 8px;">Restore</button>
+              <button type="button" class="del" data-perm-del="${tx.id}" aria-label="Permanently delete"><span aria-hidden="true">✕</span></button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    })()}
     <div class="card">
       <h2>Settings</h2>
       <div class="field settings-field">
@@ -398,6 +442,16 @@ function renderTransactions(t){
           `<span class="cat-chip">${escapeHtml(c)} <button type="button" class="chip-remove" data-remove-icat="${escapeHtml(c)}" aria-label="Remove ${escapeHtml(c)}">✕</button></span>`
         ).join('')}</div>` : ''}
       </div>
+      <div class="custom-cats-section">
+        <h3>Accounts</h3>
+        <div class="custom-cats-row">
+          <input type="text" id="new-account" placeholder="New account name" maxlength="30">
+          <button type="button" class="btn ghost" id="add-account-btn">Add</button>
+        </div>
+        <div class="custom-cat-tags">${accounts().map(a =>
+          `<span class="cat-chip">${escapeHtml(a)} <button type="button" class="chip-remove" data-remove-acct="${escapeHtml(a)}" aria-label="Remove ${escapeHtml(a)}">✕</button></span>`
+        ).join('')}</div>
+      </div>
     </div>
     <div class="card">
       <h2>Monthly Budgets</h2>
@@ -413,6 +467,14 @@ function renderTransactions(t){
         }).join('')}
       </div>
       <button type="button" class="btn ghost" id="save-budgets-btn">Save budgets</button>
+      <label class="toggle-row" style="margin-top:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="budget-carryover-toggle" ${(state.settings && state.settings.budgetCarryOver) ? 'checked' : ''}>
+        <span>Carry over unspent budget to next month</span>
+      </label>
+      <label class="toggle-row" style="margin-top:8px;display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="bill-reminders-toggle" ${(state.settings && state.settings.billReminders) ? 'checked' : ''}>
+        <span>Bill reminders (browser notifications for recurring entries due within 3 days)</span>
+      </label>
     </div>
     <div class="card">
       <h2>Recurring Entries</h2>
@@ -569,7 +631,8 @@ function attachTransactionHandlers(t){
       const note = document.getElementById('tx-note').value.trim();
       const tagsRaw = (document.getElementById('tx-tags') || {}).value || '';
       const tags = tagsRaw.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean);
-      const entry = { type: txType, category, date, note };
+      const account = (document.getElementById('tx-account') || {}).value || accounts()[0];
+      const entry = { type: txType, category, date, note, account };
       if(tags.length) entry.tags = tags;
       if(isForeign){
         entry.originalAmount = toCents(amountEl.value);
@@ -586,6 +649,49 @@ function attachTransactionHandlers(t){
       pendingFocus = '#tx-amount';
     });
   }
+  // Save as template
+  const saveTplBtn = document.getElementById('save-template-btn');
+  if(saveTplBtn){
+    saveTplBtn.addEventListener('click', () => {
+      const amountEl = document.getElementById('tx-amount');
+      if(!validateFields([[amountEl, amountError(amountEl.value)]])) return;
+      const tpl = {
+        type: txType,
+        category: document.getElementById('tx-category').value,
+        note: document.getElementById('tx-note').value.trim(),
+        amount: toCents(amountEl.value),
+        account: (document.getElementById('tx-account') || {}).value || accounts()[0]
+      };
+      const tagsRaw = (document.getElementById('tx-tags') || {}).value || '';
+      const tags = tagsRaw.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean);
+      if(tags.length) tpl.tags = tags;
+      const settings = { ...(state.settings || {}) };
+      settings.templates = [...(settings.templates || []), tpl];
+      state.settings = settings;
+      save(); render();
+    });
+  }
+  // Quick-add from template
+  document.querySelectorAll('.template-chip[data-tpl-idx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tpls = (state.settings && state.settings.templates) || [];
+      const tpl = tpls[parseInt(btn.dataset.tplIdx, 10)];
+      if(!tpl) return;
+      addTransaction({ ...tpl, date: todayISO() });
+    });
+  });
+  document.querySelectorAll('.chip-remove[data-remove-tpl]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.removeTpl, 10);
+      const settings = { ...(state.settings || {}) };
+      const tpls = [...(settings.templates || [])];
+      tpls.splice(idx, 1);
+      settings.templates = tpls;
+      state.settings = settings;
+      save(); render();
+    });
+  });
+
   // Search and filters
   const filterQuery = document.getElementById('filter-query');
   if(filterQuery){
@@ -654,6 +760,34 @@ function attachTransactionHandlers(t){
     });
   });
 
+  // Accounts
+  const addAcctBtn = document.getElementById('add-account-btn');
+  if(addAcctBtn) addAcctBtn.addEventListener('click', () => {
+    const inp = document.getElementById('new-account');
+    const name = inp.value.trim();
+    if(!name) return;
+    const settings = { ...(state.settings || {}) };
+    const accts = settings.accounts || [...DEFAULT_ACCOUNTS];
+    if(accts.includes(name)) return;
+    accts.push(name);
+    settings.accounts = accts;
+    state.settings = settings;
+    clearFields(['new-account']);
+    save(); render();
+  });
+  document.querySelectorAll('.chip-remove[data-remove-acct]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.removeAcct;
+      const settings = { ...(state.settings || {}) };
+      const accts = (settings.accounts || [...DEFAULT_ACCOUNTS]).filter(a => a !== name);
+      if(!accts.length) return;
+      settings.accounts = accts;
+      state.settings = settings;
+      if(activeAccount === name) activeAccount = 'all';
+      save(); render();
+    });
+  });
+
   // Monthly budgets
   const saveBudgetsBtn = document.getElementById('save-budgets-btn');
   if(saveBudgetsBtn){
@@ -666,6 +800,27 @@ function attachTransactionHandlers(t){
       });
       state.settings = { ...(state.settings || {}), budgets };
       save(); render();
+    });
+  }
+
+  const carryToggle = document.getElementById('budget-carryover-toggle');
+  if(carryToggle){
+    carryToggle.addEventListener('change', () => {
+      state.settings = { ...(state.settings || {}), budgetCarryOver: carryToggle.checked };
+      save(); render();
+    });
+  }
+
+  const billToggle = document.getElementById('bill-reminders-toggle');
+  if(billToggle){
+    billToggle.addEventListener('change', async () => {
+      if(billToggle.checked && 'Notification' in window && Notification.permission === 'default'){
+        const perm = await Notification.requestPermission();
+        if(perm !== 'granted'){ billToggle.checked = false; return; }
+      }
+      state.settings = { ...(state.settings || {}), billReminders: billToggle.checked };
+      save();
+      if(billToggle.checked) checkBillReminders();
     });
   }
 
@@ -749,6 +904,14 @@ function attachTransactionHandlers(t){
   document.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', () => deleteTransaction(btn.dataset.del));
   });
+  document.querySelectorAll('[data-restore]').forEach(btn => {
+    btn.addEventListener('click', () => restoreFromTrash(btn.dataset.restore));
+  });
+  document.querySelectorAll('[data-perm-del]').forEach(btn => {
+    btn.addEventListener('click', () => permanentDelete(btn.dataset.permDel));
+  });
+  const emptyTrashBtn = document.getElementById('empty-trash-btn');
+  if(emptyTrashBtn) emptyTrashBtn.addEventListener('click', emptyTrash);
 
   // Inline edit (Transactions and Daily tabs)
   document.querySelectorAll('[data-edit]').forEach(btn => {

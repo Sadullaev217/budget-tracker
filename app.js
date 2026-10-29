@@ -3,7 +3,13 @@ function userStorageKey(id){ return STORAGE_PREFIX + ':' + id; }
 const EXPENSE_CATS = ['Food','Housing','Transport','Utilities','Entertainment','Health','Other'];
 const INCOME_CATS = ['Salary','Freelance','Gift','Other'];
 
-let state = { transactions: [], goals: [], recurring: [], recurringGenerated: {} };
+const DEFAULT_ACCOUNTS = ['Cash','Bank','Credit card'];
+let state = { transactions: [], goals: [], recurring: [], recurringGenerated: {}, trash: [] };
+function accounts(){
+  const custom = (state.settings && state.settings.accounts) || [];
+  return custom.length ? custom : DEFAULT_ACCOUNTS;
+}
+let activeAccount = 'all';
 
 function expenseCats(){
   return mergeCats(EXPENSE_CATS, state.settings && state.settings.customExpenseCats);
@@ -64,7 +70,7 @@ async function signOut(){
   await sb.auth.signOut();
   currentUser = null;
   currentUserId = null;
-  state = { transactions: [], goals: [], recurring: [], recurringGenerated: {} };
+  state = { transactions: [], goals: [], recurring: [], recurringGenerated: {}, trash: [] };
   activeTab = 'overview';
   authMode = 'signin';
   authError = '';
@@ -72,6 +78,7 @@ async function signOut(){
   backupStatus = { msg: '', isError: false };
   editingId = null;
   txFilter = { query: '', type: 'all', category: 'all', dateFrom: '', dateTo: '', tag: '' };
+  activeAccount = 'all';
   hideToast();
   render();
 }
@@ -86,9 +93,12 @@ async function loadUserData(){
         state = migrated;
         if(!state.recurring) state.recurring = [];
         if(!state.recurringGenerated) state.recurringGenerated = {};
+        if(!state.trash) state.trash = [];
         try{ localStorage.setItem(userStorageKey(currentUserId), JSON.stringify(state)); }catch(e){}
         if(changed) save();
         generateRecurring();
+        purgeOldTrash();
+        checkBillReminders();
         return;
       }
     }
@@ -100,10 +110,13 @@ async function loadUserData(){
       state = migrated;
       if(!state.recurring) state.recurring = [];
       if(!state.recurringGenerated) state.recurringGenerated = {};
+      if(!state.trash) state.trash = [];
       if(changed) save();
     }
   }catch(e){}
   generateRecurring();
+  purgeOldTrash();
+  checkBillReminders();
   if(state.settings && state.settings.theme){
     document.documentElement.setAttribute('data-theme', state.settings.theme);
     try{ localStorage.setItem(THEME_KEY, state.settings.theme); }catch(e){}
@@ -117,6 +130,25 @@ function generateRecurring(){
   entries.forEach(e => state.transactions.push(e));
   Object.assign(state.recurringGenerated, generated);
   save();
+}
+
+function checkBillReminders(){
+  if(!state.recurring || !state.recurring.length) return;
+  if(!(state.settings && state.settings.billReminders)) return;
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  const now = new Date();
+  const today = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  state.recurring.forEach(r => {
+    const day = Math.min(r.dayOfMonth || 1, daysInMonth);
+    let diff = day - today;
+    if(diff < 0) diff += daysInMonth;
+    if(diff >= 0 && diff <= 3){
+      const label = r.note || r.category;
+      const when = diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : `in ${diff} days`;
+      new Notification('Bill reminder', { body: `${label}: ${fmt(r.amount)} due ${when}`, icon: 'icon-192.png' });
+    }
+  });
 }
 
 async function restoreSession(){
@@ -176,11 +208,39 @@ function deleteTransaction(id){
   if(idx < 0) return;
   const [item] = state.transactions.splice(idx, 1);
   if(editingId === id) editingId = null;
+  item._deletedAt = new Date().toISOString();
+  if(!state.trash) state.trash = [];
+  state.trash.push(item);
   save(); render();
-  showUndoToast(`Deleted "${item.note || item.category}".`, () => {
+  showUndoToast(`Moved "${item.note || item.category}" to trash.`, () => {
+    state.trash = (state.trash || []).filter(t => t.id !== item.id);
+    delete item._deletedAt;
     state.transactions.splice(Math.min(idx, state.transactions.length), 0, item);
     save(); render();
   });
+}
+function restoreFromTrash(id){
+  if(!state.trash) return;
+  const idx = state.trash.findIndex(t => t.id === id);
+  if(idx < 0) return;
+  const [item] = state.trash.splice(idx, 1);
+  delete item._deletedAt;
+  state.transactions.push(item);
+  save(); render();
+}
+function permanentDelete(id){
+  if(!state.trash) return;
+  state.trash = state.trash.filter(t => t.id !== id);
+  save(); render();
+}
+function emptyTrash(){
+  state.trash = [];
+  save(); render();
+}
+function purgeOldTrash(){
+  if(!state.trash || !state.trash.length) return;
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  state.trash = state.trash.filter(t => t._deletedAt > cutoff);
 }
 function addGoal(data){
   state.goals.push({ id: uid(), saved: 0, ...data });
@@ -407,8 +467,53 @@ function render(){
 
   attachPanelHandlers(t);
   if(deferredInstallPrompt) showInstallBanner();
+
+  // Onboarding overlay for new users
+  if(!state.transactions.length && !(state.settings && state.settings.onboarded)){
+    showOnboarding();
+  }
+
   restoreDrafts(drafts);
   restoreFocus(focusSel);
+}
+
+let onboardStep = 0;
+function showOnboarding(){
+  if(document.getElementById('onboarding-overlay')) return;
+  const steps = [
+    { title: 'Welcome to The Ledger', body: 'Track your income, expenses, and savings in one place. Everything syncs across devices.' },
+    { title: 'Log transactions', body: 'Head to the Transactions tab to add entries. Use tags, accounts, and categories to organize.' },
+    { title: 'Set goals & budgets', body: 'Create savings goals in the Goals tab and monthly budgets in Settings. You\'re all set!' }
+  ];
+  onboardStep = 0;
+  const overlay = document.createElement('div');
+  overlay.id = 'onboarding-overlay';
+  overlay.className = 'onboarding-overlay';
+  function renderStep(){
+    const s = steps[onboardStep];
+    const isLast = onboardStep === steps.length - 1;
+    overlay.innerHTML = `<div class="onboarding-card">
+      <div class="onboarding-dots">${steps.map((_,i) => `<span class="dot${i === onboardStep ? ' active' : ''}"></span>`).join('')}</div>
+      <h2>${s.title}</h2>
+      <p>${s.body}</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" class="btn ghost" id="onboard-skip">Skip</button>
+        <button type="button" class="btn" id="onboard-next">${isLast ? 'Get started' : 'Next'}</button>
+      </div>
+    </div>`;
+    overlay.querySelector('#onboard-skip').addEventListener('click', dismiss);
+    overlay.querySelector('#onboard-next').addEventListener('click', () => {
+      if(isLast) dismiss();
+      else { onboardStep++; renderStep(); }
+    });
+  }
+  function dismiss(){
+    overlay.remove();
+    state.settings = { ...(state.settings || {}), onboarded: true };
+    save();
+  }
+  renderStep();
+  document.body.appendChild(overlay);
 }
 
 // Chart geometry depends on viewport width, so redraw when the width changes.
@@ -446,6 +551,9 @@ function attachPanelHandlers(t){
 
   document.querySelectorAll('[data-range]').forEach(btn => {
     btn.addEventListener('click', () => { overviewRange = btn.dataset.range; render(); });
+  });
+  document.querySelectorAll('[data-acct]').forEach(btn => {
+    btn.addEventListener('click', () => { activeAccount = btn.dataset.acct; render(); });
   });
   document.querySelectorAll('[data-cat-link]').forEach(el => {
     const handler = () => {

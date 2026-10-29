@@ -9,14 +9,15 @@ function renderOverview(){
   } else {
     ({ from, to } = dateRange(overviewRange, now));
   }
+  const acctFiltered = activeAccount === 'all' ? state.transactions : state.transactions.filter(tx => tx.account === activeAccount);
   const filtered = from
-    ? state.transactions.filter(tx => (!from || tx.date >= from) && (!to || tx.date <= to))
-    : state.transactions;
+    ? acctFiltered.filter(tx => (!from || tx.date >= from) && (!to || tx.date <= to))
+    : acctFiltered;
   const t = sumTotals(filtered);
 
   const balClass = t.balance < 0 ? 'negative' : 'positive';
   const budgets = (state.settings && state.settings.budgets) || {};
-  const monthSpend = currentMonthByCategory(state.transactions, now);
+  const monthSpend = currentMonthByCategory(acctFiltered, now);
   const catEntries = Object.entries(t.byCategory).sort((a,b)=>b[1]-a[1]);
   const maxCat = catEntries.length ? catEntries[0][1] : 1;
 
@@ -44,17 +45,22 @@ function renderOverview(){
   }</div>${customInputs}`;
 
   // Budget alerts (always current month, independent of date range)
+  const carryOver = !!(state.settings && state.settings.budgetCarryOver);
+  const prevSpend = carryOver ? previousMonthByCategory(acctFiltered, now) : {};
   const ALERT_THRESHOLD = 0.8;
   const alertRows = [];
   Object.keys(budgets).forEach(cat => {
-    const budget = budgets[cat];
+    let budget = budgets[cat];
     if(budget <= 0) return;
+    const carry = carryOver ? Math.max(0, budget - (prevSpend[cat] || 0)) : 0;
+    const effective = budget + carry;
     const spent = monthSpend[cat] || 0;
-    const pct = spent / budget;
+    const pct = spent / effective;
+    const carryLabel = carry > 0 ? ` (incl. ${fmt(carry)} carry-over)` : '';
     if(pct >= 1){
-      alertRows.push(`<div class="budget-alert over"><span class="alert-cat">${escapeHtml(cat)}</span> over budget — ${fmt(spent)} of ${fmt(budget)} spent</div>`);
+      alertRows.push(`<div class="budget-alert over"><span class="alert-cat">${escapeHtml(cat)}</span> over budget — ${fmt(spent)} of ${fmt(effective)} spent${carryLabel}</div>`);
     } else if(pct >= ALERT_THRESHOLD){
-      alertRows.push(`<div class="budget-alert warn"><span class="alert-cat">${escapeHtml(cat)}</span> at ${Math.round(pct * 100)}% — ${fmt(spent)} of ${fmt(budget)} spent</div>`);
+      alertRows.push(`<div class="budget-alert warn"><span class="alert-cat">${escapeHtml(cat)}</span> at ${Math.round(pct * 100)}% — ${fmt(spent)} of ${fmt(effective)} spent${carryLabel}</div>`);
     }
   });
   const alertsHtml = alertRows.length
@@ -62,11 +68,14 @@ function renderOverview(){
     : '';
 
   const catRows = catEntries.length ? catEntries.map(([cat, amt]) => {
-    const budget = budgets[cat];
+    const baseBudget = budgets[cat];
+    const carry = (carryOver && baseBudget > 0) ? Math.max(0, baseBudget - (prevSpend[cat] || 0)) : 0;
+    const effectiveBudget = baseBudget > 0 ? baseBudget + carry : 0;
     const spent = monthSpend[cat] || 0;
-    const over = budget > 0 && spent > budget;
-    const budgetInfo = budget > 0
-      ? `<span class="budget-info${over ? ' over-budget' : ''}">${fmt(spent)} / ${fmt(budget)} this month${over ? ' — over budget!' : ''}</span>`
+    const over = effectiveBudget > 0 && spent > effectiveBudget;
+    const carryNote = carry > 0 ? ` (+${fmt(carry)} carry-over)` : '';
+    const budgetInfo = effectiveBudget > 0
+      ? `<span class="budget-info${over ? ' over-budget' : ''}">${fmt(spent)} / ${fmt(effectiveBudget)} this month${carryNote}${over ? ' — over budget!' : ''}</span>`
       : '';
     return `
     <div class="cat-row cat-link${over ? ' over-budget-row' : ''}" data-cat-link="${escapeHtml(cat)}" role="button" tabindex="0" aria-label="View ${escapeHtml(cat)} transactions">
@@ -101,8 +110,8 @@ function renderOverview(){
   const thisMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const lastMonthPrefix = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
-  const thisMonthExp = state.transactions.filter(tx => tx.type === 'expense' && tx.date.startsWith(thisMonthPrefix)).reduce((s, tx) => s + tx.amount, 0);
-  const lastMonthExp = state.transactions.filter(tx => tx.type === 'expense' && tx.date.startsWith(lastMonthPrefix)).reduce((s, tx) => s + tx.amount, 0);
+  const thisMonthExp = acctFiltered.filter(tx => tx.type === 'expense' && tx.date.startsWith(thisMonthPrefix)).reduce((s, tx) => s + tx.amount, 0);
+  const lastMonthExp = acctFiltered.filter(tx => tx.type === 'expense' && tx.date.startsWith(lastMonthPrefix)).reduce((s, tx) => s + tx.amount, 0);
   let trendText = '';
   if(lastMonthExp > 0 && thisMonthExp > 0){
     const change = Math.round(((thisMonthExp - lastMonthExp) / lastMonthExp) * 100);
@@ -129,6 +138,10 @@ function renderOverview(){
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
       <div style="flex:1">${rangePicker}</div>
       <button type="button" class="btn ghost" id="download-report-btn" style="font-size:0.78rem;padding:6px 14px;">Download report</button>
+    </div>
+    <div class="range-picker" role="group" aria-label="Account filter" style="margin-top:6px;">
+      <button type="button" class="range-btn${activeAccount === 'all' ? ' active' : ''}" data-acct="all">All accounts</button>
+      ${accounts().map(a => `<button type="button" class="range-btn${activeAccount === a ? ' active' : ''}" data-acct="${escapeHtml(a)}">${escapeHtml(a)}</button>`).join('')}
     </div>
     ${alertsHtml}
     ${trendText ? `<div class="trend-insight">${trendText}</div>` : ''}
@@ -166,7 +179,7 @@ function renderOverview(){
         <h2>Expenses by category</h2>
         ${renderCategoryChart(t.byCategory)}
       </div>
-      ${hasBudgets ? `<div class="tile tile-burndown">${renderBudgetBurndown(budgets, monthSpend)}</div>` : ''}
+      ${hasBudgets ? `<div class="tile tile-burndown">${renderBudgetBurndown(carryOver ? Object.fromEntries(Object.entries(budgets).map(([c,b]) => [c, b + Math.max(0, b - (prevSpend[c]||0))])) : budgets, monthSpend)}</div>` : ''}
       <div class="tile tile-trend">
         ${renderBalanceTrend(balSeries)}
       </div>

@@ -880,6 +880,22 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
 .goal-card.dragging{ opacity: 0.4; }
 .goal-card.drag-over{ border-top: 3px solid var(--navy); }
 
+/* Onboarding overlay */
+.onboarding-overlay{
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.onboarding-card{
+  background: var(--surface); border-radius: 16px; padding: 32px;
+  max-width: 420px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.onboarding-card h2{ margin: 0 0 12px; font-size: 1.3rem; }
+.onboarding-card p{ margin: 0 0 20px; color: var(--text-dim); line-height: 1.5; }
+.onboarding-dots{ display: flex; gap: 6px; margin-bottom: 16px; }
+.onboarding-dots .dot{ width: 8px; height: 8px; border-radius: 50%; background: var(--surface-3); }
+.onboarding-dots .dot.active{ background: var(--navy); }
+
 /* PWA update banner */
 .update-banner{
   position: fixed; top: 0; left: 0; right: 0; z-index: 9999;

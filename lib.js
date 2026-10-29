@@ -138,6 +138,18 @@ function currentMonthByCategory(transactions, now){
   return byCategory;
 }
 
+function previousMonthByCategory(transactions, now){
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prefix = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+  const byCategory = {};
+  transactions.forEach(t => {
+    if(t.type === 'expense' && String(t.date).startsWith(prefix)){
+      byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
+    }
+  });
+  return byCategory;
+}
+
 function sumTotals(transactions){
   let income = 0, expense = 0;
   const byCategory = {};
@@ -295,5 +307,5 @@ function dateRange(range, now){
 }
 
 if(typeof module !== 'undefined' && module.exports){
-  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, CAT_COLORS, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, monthlyIncomeExpenseSeries, balanceOverTime, mergeCats, generateRecurringEntries, isOverBudget, dateRange, categoryColor };
+  module.exports = { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, CAT_COLORS, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, previousMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, monthlyIncomeExpenseSeries, balanceOverTime, mergeCats, generateRecurringEntries, isOverBudget, dateRange, categoryColor };
 }
