@@ -169,8 +169,8 @@ function renderBalanceTrend(series){
     const cls = p.balance >= 0 ? 'net-positive' : 'net-negative';
     return `
       <g class="trend-point" tabindex="0" role="img" aria-label="${p.label}: ${fmt(Math.abs(p.balance))} ${p.balance >= 0 ? 'positive' : 'negative'}" data-month="${p.label}" data-value="${fmt(p.balance)}" data-cx="${p.x}" data-top="${p.y}">
-        <circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--accent)"></circle>
-        <text class="chart-value-label" x="${p.x}" y="${p.y - 10}" text-anchor="middle" font-size="10">${formatMoneyCompact(p.balance, userCurrency())}</text>
+        <circle cx="${p.x}" cy="${p.y}" r="8" fill="#2563eb"></circle>
+        <text class="chart-value-label" x="${p.x}" y="${p.y - 16}" text-anchor="middle">${formatMoneyCompact(p.balance, userCurrency())}</text>
         <rect class="chart-hit" x="${p.x - slot/2}" y="${padTop}" width="${slot}" height="${plotH + padBottom}"></rect>
       </g>
     `;
@@ -185,8 +185,8 @@ function renderBalanceTrend(series){
     <div class="chart-wrap trend-chart-wrap">
       <svg class="chart-svg trend-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
         <line class="chart-baseline" x1="${padLeft}" y1="${zeroY}" x2="${W-padRight}" y2="${zeroY}" stroke-dasharray="4 3"></line>
-        <path d="${areaPath}" fill="var(--accent)" opacity="0.1"></path>
-        <path d="${linePath}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="${areaPath}" fill="#2563eb" opacity="0.12"></path>
+        <path d="${linePath}" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
         ${dots}
         ${labels}
       </svg>
