@@ -1,7 +1,7 @@
 // Run with: node --test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { DATA_VERSION, CURRENCIES, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, mergeCats, generateRecurringEntries, isOverBudget } = require('../lib.js');
+const { DATA_VERSION, CURRENCIES, DEFAULT_CURRENCY, toCents, amountError, formatMoney, formatMoneyCompact, localISO, escapeHtml, migrateData, parseBackup, transactionsToCSV, filterTransactions, currentMonthByCategory, sumTotals, sumDay, monthlyExpenseSeries, monthlyIncomeExpenseSeries, balanceOverTime, mergeCats, generateRecurringEntries, isOverBudget } = require('../lib.js');
 
 test('toCents converts dollar strings to integer cents', () => {
   assert.equal(toCents('12.34'), 1234);
@@ -223,6 +223,100 @@ test('isOverBudget detects when spending exceeds budget', () => {
   assert.equal(isOverBudget(40000, 50000), false);
   assert.equal(isOverBudget(50000, 50000), false);
   assert.equal(isOverBudget(10000, 0), false);
+});
+
+test('DEFAULT_CURRENCY is USD', () => {
+  assert.equal(DEFAULT_CURRENCY, 'USD');
+});
+
+test('toCents rounds sub-cent values via Math.round on float*100', () => {
+  // 1.005 * 100 = 100.49999... in IEEE 754, so Math.round gives 100
+  assert.equal(toCents('1.005'), 100);
+  assert.equal(toCents('1.006'), 101);
+  assert.equal(toCents('99.999'), 10000);
+});
+
+test('monthlyIncomeExpenseSeries splits income and expenses over 6 months', () => {
+  const data = [
+    { type: 'income', amount: 5000, date: '2026-07-01' },
+    { type: 'expense', amount: 2000, date: '2026-07-15' },
+    { type: 'income', amount: 6000, date: '2026-09-01' },
+    { type: 'expense', amount: 1500, date: '2026-09-10' },
+    { type: 'expense', amount: 500, date: '2026-09-20' },
+    { type: 'income', amount: 9999, date: '2025-01-01' },
+  ];
+  const s = monthlyIncomeExpenseSeries(data, new Date(2026, 9, 15));
+  assert.deepEqual(s.map(m => m.key), ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10']);
+  assert.deepEqual(s.map(m => m.income), [0, 0, 5000, 0, 6000, 0]);
+  assert.deepEqual(s.map(m => m.expense), [0, 0, 2000, 0, 2000, 0]);
+});
+
+test('monthlyIncomeExpenseSeries returns zeros when no transactions exist', () => {
+  const s = monthlyIncomeExpenseSeries([], new Date(2026, 9, 15));
+  assert.equal(s.length, 6);
+  s.forEach(m => {
+    assert.equal(m.income, 0);
+    assert.equal(m.expense, 0);
+  });
+});
+
+test('balanceOverTime computes running balance including pre-window transactions', () => {
+  const data = [
+    { type: 'income', amount: 10000, date: '2026-01-01' },
+    { type: 'expense', amount: 3000, date: '2026-01-15' },
+    { type: 'income', amount: 5000, date: '2026-07-01' },
+    { type: 'expense', amount: 2000, date: '2026-08-10' },
+  ];
+  const s = balanceOverTime(data, new Date(2026, 9, 15));
+  assert.deepEqual(s.map(m => m.key), ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10']);
+  assert.equal(s[0].balance, 7000);
+  assert.equal(s[1].balance, 7000);
+  assert.equal(s[2].balance, 12000);
+  assert.equal(s[3].balance, 10000);
+  assert.equal(s[4].balance, 10000);
+  assert.equal(s[5].balance, 10000);
+});
+
+test('balanceOverTime with no transactions returns all zeros', () => {
+  const s = balanceOverTime([], new Date(2026, 9, 15));
+  assert.equal(s.length, 6);
+  s.forEach(m => assert.equal(m.balance, 0));
+});
+
+test('balanceOverTime labels include year when spanning two years', () => {
+  const s = balanceOverTime([], new Date(2027, 1, 10));
+  assert.equal(s[0].key, '2026-09');
+  assert.equal(s[5].key, '2027-02');
+  assert.match(s[0].label, /26/);
+});
+
+test('sumTotals with empty array returns zero totals', () => {
+  const result = sumTotals([]);
+  assert.deepEqual(result, { income: 0, expense: 0, balance: 0, byCategory: {} });
+});
+
+test('filterTransactions with all filters combined', () => {
+  const data = [
+    { id: 1, type: 'expense', category: 'Food', note: 'Groceries', date: '2026-10-05' },
+    { id: 2, type: 'expense', category: 'Food', note: 'Lunch', date: '2026-10-15' },
+    { id: 3, type: 'income', category: 'Salary', note: '', date: '2026-10-10' },
+    { id: 4, type: 'expense', category: 'Food', note: 'Groceries', date: '2026-09-01' },
+  ];
+  const result = filterTransactions(data, { query: 'groceries', type: 'expense', category: 'Food', dateFrom: '2026-10-01', dateTo: '2026-10-31' });
+  assert.deepEqual(result.map(t => t.id), [1]);
+});
+
+test('transactionsToCSV handles empty list', () => {
+  const csv = transactionsToCSV([]);
+  assert.equal(csv.trim(), '"date","type","category","amount","note"');
+});
+
+test('transactionsToCSV handles special characters in notes', () => {
+  const csv = transactionsToCSV([
+    { date: '2026-10-01', type: 'expense', category: 'Food', amount: 500, note: '+tabbed\tnote' }
+  ]);
+  const lines = csv.trim().split('\r\n');
+  assert.equal(lines[1], '"2026-10-01","expense","Food","5.00","\''+'+tabbed\tnote"');
 });
 
 test('parseBackup round-trip preserves recurring, budgets, and custom categories', () => {
