@@ -186,8 +186,15 @@ body{
 .budget-alert.over{
   background: var(--expense-bg); color: var(--expense-text); border-left: 3px solid var(--expense);
 }
-:root[data-theme="dark"] .budget-alert.warn{ color: #FBBF24; }
+:root[data-theme="dark"] .budget-alert.warn{ color: #FCD34D; background: rgba(251,191,36,0.1); }
+:root[data-theme="dark"] .budget-alert.over{ color: #FCA5A5; background: rgba(248,113,113,0.12); }
 .alert-cat{ font-weight: 600; }
+.alerts-toggle{
+  background: none; border: none; color: var(--text-dim); cursor: pointer;
+  font-size: 0.75rem; padding: 0; margin-left: auto; text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.budget-alerts h3{ display: flex; align-items: center; gap: 8px; }
 
 /* Bento grid — Overview */
 .bento-grid{
@@ -195,7 +202,7 @@ body{
   grid-template-columns: repeat(4, 1fr);
   grid-template-areas:
     "balance balance income expense"
-    "balance balance categories categories"
+    "stats stats categories categories"
     "chart chart iechart iechart"
     "catchart catchart trend trend"
     "burndown burndown burndown burndown"
@@ -224,6 +231,31 @@ body{
 .tile-trend{ grid-area: trend; position: relative; }
 .tile-burndown{ grid-area: burndown; }
 .tile-goals{ grid-area: goals; }
+.tile-stats{ grid-area: stats; }
+
+/* Stats rows */
+.stat-row{
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.82rem;
+}
+.stat-row:last-child{ border-bottom: none; }
+.stat-row span:first-child{ color: var(--text-dim); }
+.stat-row span:last-child{ font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Category click-through */
+.cat-link{ cursor: pointer; transition: background .15s; border-radius: 8px; padding: 6px 8px; margin: -6px -8px; }
+.cat-link:hover{ background: var(--surface-2); }
+.cat-link:focus-visible{ outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Sync indicator */
+.sync-dot{
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  vertical-align: middle; margin-left: 6px;
+}
+.sync-dot.synced{ background: var(--income); }
+.sync-dot.syncing{ background: var(--gold-soft); animation: pulse-dot 1s ease infinite; }
+.sync-dot.offline{ background: var(--expense); }
+@keyframes pulse-dot{ 0%,100%{ opacity: 1; } 50%{ opacity: 0.3; } }
 
 .tile-label{
   font-family: 'IBM Plex Mono', monospace;
@@ -724,6 +756,7 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
       "balance"
       "income"
       "expense"
+      "stats"
       "categories"
       "chart"
       "iechart"

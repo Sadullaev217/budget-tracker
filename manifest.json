@@ -1,7 +1,7 @@
 {
   "name": "Ledger — Budget Tracker",
   "short_name": "Ledger",
-  "description": "Track income, expenses & savings goals — all data stays in your browser.",
+  "description": "Track income, expenses & savings goals with cross-device sync.",
   "start_url": "./",
   "id": "/",
   "scope": "./",
@@ -15,5 +15,25 @@
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add Expense",
+      "short_name": "Expense",
+      "url": "./?tab=transactions&type=expense",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Add Income",
+      "short_name": "Income",
+      "url": "./?tab=transactions&type=income",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Overview",
+      "short_name": "Overview",
+      "url": "./?tab=overview",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
   ]
 }

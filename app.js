@@ -14,6 +14,7 @@ function incomeCats(){
 let activeTab = 'overview';
 let overviewRange = 'month';
 let customRange = { from: '', to: '' };
+let alertsCollapsed = false;
 let txType = 'expense';
 let dailyType = 'expense';
 
@@ -22,6 +23,7 @@ let currentUserId = null;
 let authMode = 'signin';
 let authError = '';
 let authMessage = '';
+let syncStatus = 'synced';
 
 // localISO, toCents, fmt, escapeHtml, migrateData, sumTotals, sumDay and
 // monthlyExpenseSeries live in lib.js (loaded first, and unit-tested).
@@ -141,6 +143,8 @@ async function save(){
   if(!currentUser) return;
   state.v = DATA_VERSION;
   try{ localStorage.setItem(userStorageKey(currentUserId), JSON.stringify(state)); }catch(e){}
+  syncStatus = 'syncing';
+  updateSyncDot();
   try {
     if(currentUserId){
       await sb.from('user_data').upsert({
@@ -148,8 +152,19 @@ async function save(){
         data: state,
         updated_at: new Date().toISOString()
       });
+      syncStatus = 'synced';
     }
-  } catch(e) {}
+  } catch(e) {
+    syncStatus = 'offline';
+  }
+  updateSyncDot();
+}
+function updateSyncDot(){
+  const el = document.getElementById('sync-dot');
+  if(!el) return;
+  el.className = 'sync-dot ' + syncStatus;
+  el.setAttribute('aria-label', syncStatus === 'synced' ? 'Data synced' : syncStatus === 'syncing' ? 'Syncing…' : 'Offline — saved locally');
+  el.title = el.getAttribute('aria-label');
 }
 
 function addTransaction(data){
@@ -356,7 +371,7 @@ function render(){
       <div class="header-actions">
         <div>
           <div class="today">${today}</div>
-          <div class="signed-in-as">signed in as <strong>${escapeHtml(currentUser)}</strong></div>
+          <div class="signed-in-as">signed in as <strong>${escapeHtml(currentUser)}</strong> <span class="sync-dot ${syncStatus}" id="sync-dot" aria-label="${syncStatus === 'synced' ? 'Data synced' : syncStatus === 'syncing' ? 'Syncing…' : 'Offline — saved locally'}" title="${syncStatus === 'synced' ? 'Data synced' : syncStatus === 'syncing' ? 'Syncing…' : 'Offline — saved locally'}"></span></div>
         </div>
         <button type="button" class="theme-toggle" id="theme-toggle" aria-label="${isDark ? 'Switch to light mode' : 'Switch to dark mode'}">${isDark ? SUN_ICON : MOON_ICON}</button>
         <button type="button" class="btn ghost" id="sign-out-btn" style="padding:9px 16px; font-size:0.78rem;">Sign out</button>
@@ -421,8 +436,21 @@ function attachPanelHandlers(t){
     });
   });
 
+  const alertsToggle = document.getElementById('alerts-toggle');
+  if(alertsToggle) alertsToggle.addEventListener('click', () => { alertsCollapsed = !alertsCollapsed; render(); });
+
   document.querySelectorAll('[data-range]').forEach(btn => {
     btn.addEventListener('click', () => { overviewRange = btn.dataset.range; render(); });
+  });
+  document.querySelectorAll('[data-cat-link]').forEach(el => {
+    const handler = () => {
+      txFilter = { query: '', type: 'expense', category: el.dataset.catLink, dateFrom: '', dateTo: '' };
+      activeTab = 'transactions';
+      pendingFocus = '#filter-category';
+      render();
+    };
+    el.addEventListener('click', handler);
+    el.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); handler(); } });
   });
   const crFrom = document.getElementById('custom-range-from');
   const crTo = document.getElementById('custom-range-to');
@@ -464,5 +492,15 @@ function showInstallBanner(){
     deferredInstallPrompt = null;
   });
 }
+
+// Handle PWA shortcut query params
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var tab = params.get('tab');
+  if(tab && ['overview','transactions','daily','goals'].includes(tab)) activeTab = tab;
+  var type = params.get('type');
+  if(type === 'income' || type === 'expense') txType = type;
+  if(params.toString()) history.replaceState(null, '', window.location.pathname);
+})();
 
 restoreSession();

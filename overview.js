@@ -58,7 +58,7 @@ function renderOverview(){
     }
   });
   const alertsHtml = alertRows.length
-    ? `<div class="budget-alerts"><h3>Monthly budget alerts</h3>${alertRows.join('')}</div>`
+    ? `<div class="budget-alerts"><h3>Monthly budget alerts (${alertRows.length}) <button type="button" class="alerts-toggle" id="alerts-toggle">${alertsCollapsed ? 'Show' : 'Hide'}</button></h3>${alertsCollapsed ? '' : alertRows.join('')}</div>`
     : '';
 
   const catRows = catEntries.length ? catEntries.map(([cat, amt]) => {
@@ -69,7 +69,7 @@ function renderOverview(){
       ? `<span class="budget-info${over ? ' over-budget' : ''}">${fmt(spent)} / ${fmt(budget)} this month${over ? ' — over budget!' : ''}</span>`
       : '';
     return `
-    <div class="cat-row${over ? ' over-budget-row' : ''}">
+    <div class="cat-row cat-link${over ? ' over-budget-row' : ''}" data-cat-link="${escapeHtml(cat)}" role="button" tabindex="0" aria-label="View ${escapeHtml(cat)} transactions">
       <div class="cat-top"><span>${escapeHtml(cat)}</span><span class="amt">${fmt(amt)}</span></div>
       ${budgetInfo}
       <div class="bar-track"><div class="bar-fill navy" style="width:${Math.round((amt/maxCat)*100)}%"></div></div>
@@ -86,6 +86,16 @@ function renderOverview(){
         <div class="bar-track"><div class="bar-fill gold" style="width:${pct}%"></div></div>
       </div>`;
   }).join('') : `<div class="empty">No savings goals yet. Set one from the Savings Goals tab.</div>`;
+
+  // Transaction statistics
+  const expenses = filtered.filter(tx => tx.type === 'expense');
+  const expDays = new Set(expenses.map(tx => tx.date));
+  const dayCount = expDays.size || 1;
+  const avgDaily = expenses.length ? Math.round(t.expense / dayCount) : 0;
+  const topDay = expenses.length
+    ? Array.from(expDays).map(d => ({ d, total: expenses.filter(tx => tx.date === d).reduce((s, tx) => s + tx.amount, 0) })).sort((a, b) => b.total - a.total)[0]
+    : null;
+  const txCount = filtered.length;
 
   const chartSeries = monthlyExpenseSeries(filtered, now);
   const ieSeries = monthlyIncomeExpenseSeries(filtered, now);
@@ -114,6 +124,13 @@ function renderOverview(){
       <div class="tile tile-expense">
         <div class="tile-label">Expenses <span class="tile-range">${escapeHtml(rangeLabel)}</span></div>
         <div class="tile-amount">${fmt(t.expense)}</div>
+      </div>
+      <div class="tile tile-stats">
+        <h2>Quick stats</h2>
+        <div class="stat-row"><span>Transactions</span><span>${txCount}</span></div>
+        <div class="stat-row"><span>Avg daily spend</span><span>${fmt(avgDaily)}</span></div>
+        ${topDay ? `<div class="stat-row"><span>Top spending day</span><span>${topDay.d} (${fmt(topDay.total)})</span></div>` : ''}
+        <div class="stat-row"><span>Days with expenses</span><span>${expDays.size}</span></div>
       </div>
       <div class="tile tile-categories">
         <h2>Spending by category</h2>
