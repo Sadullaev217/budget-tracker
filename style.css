@@ -842,6 +842,16 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
 /* Balance trend line chart */
 .trend-chart-wrap .chart-baseline{ stroke-dasharray: 4 3; opacity: 0.3; }
 
+/* Transaction tags */
+.tx-tag{
+  display: inline-block; font-size: 0.7rem; padding: 1px 6px;
+  border-radius: 8px; background: var(--surface-3); color: var(--text-dim);
+  margin-left: 4px;
+}
+
+/* Recurring next occurrence */
+.next-occ{ font-style: italic; opacity: 0.7; }
+
 /* Spending trend insight */
 .trend-insight{
   padding: 10px 16px; margin-bottom: 12px;
@@ -856,6 +866,14 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
 .goal-deadline{ font-size: 0.78rem; color: var(--text-dim); margin-top: 4px; }
 .goal-deadline.on-track{ color: var(--income-text); }
 .goal-deadline.behind{ color: var(--expense-text); }
+
+/* Goal contributions history */
+.goal-history{ margin-top: 6px; font-size: 0.78rem; }
+.goal-history summary{ cursor: pointer; color: var(--text-dim); }
+.contrib-list{ list-style: none; padding: 0; margin: 6px 0 0; }
+.contrib-list li{ display: flex; justify-content: space-between; padding: 2px 0; color: var(--text-dim); }
+.contrib-list li span:last-child{ color: var(--income-text); font-weight: 500; }
+.contrib-more{ opacity: 0.6; font-style: italic; }
 
 /* Drag to reorder goals */
 .goal-card[draggable="true"]{ cursor: grab; }

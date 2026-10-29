@@ -21,11 +21,13 @@ function renderLedgerLine(tx){
   const amtText = foreign
     ? `${sign}${formatMoney(tx.originalAmount, tx.currency)} <span class="equiv">(${fmt(tx.amount)})</span>`
     : `${sign}${fmt(tx.amount)}`;
+  const tagHtml = tx.tags && tx.tags.length ? tx.tags.map(t => `<span class="tx-tag">#${escapeHtml(t)}</span>`).join('') : '';
   return `
     <div class="ledger-line">
       <div class="info">
         <span class="desc">${label}</span>
         <span class="cat-tag">${escapeHtml(tx.category)}</span>
+        ${tagHtml}
       </div>
       <div class="right">
         <span class="amt ${tx.type}">${amtText}</span>
@@ -79,9 +81,13 @@ function renderEditForm(tx){
         </div>
       </div>
       <div class="form-row">
-        <div class="field" style="flex: 3;">
+        <div class="field" style="flex: 2;">
           <label for="edit-note">Note (optional)</label>
           <input type="text" id="edit-note" value="${escapeHtml(tx.note || '')}">
+        </div>
+        <div class="field" style="flex: 1;">
+          <label for="edit-tags">Tags</label>
+          <input type="text" id="edit-tags" value="${tx.tags ? tx.tags.map(t => '#' + t).join(' ') : ''}">
         </div>
       </div>
       <div class="edit-actions">
@@ -92,7 +98,7 @@ function renderEditForm(tx){
   `;
 }
 
-const EDIT_FIELDS = ['edit-type', 'edit-amount', 'edit-currency', 'edit-equiv', 'edit-category', 'edit-date', 'edit-note'];
+const EDIT_FIELDS = ['edit-type', 'edit-amount', 'edit-currency', 'edit-equiv', 'edit-category', 'edit-date', 'edit-note', 'edit-tags'];
 function startEdit(id){
   clearFields(EDIT_FIELDS);
   editingId = id;
@@ -133,6 +139,9 @@ function saveEdit(){
   tx.category = document.getElementById('edit-category').value;
   tx.date = dateEl.value;
   tx.note = document.getElementById('edit-note').value.trim();
+  const editTagsRaw = (document.getElementById('edit-tags') || {}).value || '';
+  const editTags = editTagsRaw.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean);
+  if(editTags.length) tx.tags = editTags; else delete tx.tags;
   save();
   stopEdit();
 }
@@ -239,8 +248,8 @@ function renderRecurringPreview(){
   `;
 }
 
-let txFilter = { query: '', type: 'all', category: 'all', dateFrom: '', dateTo: '' };
-function isFiltering(){ return !!txFilter.query.trim() || txFilter.type !== 'all' || txFilter.category !== 'all' || !!txFilter.dateFrom || !!txFilter.dateTo; }
+let txFilter = { query: '', type: 'all', category: 'all', dateFrom: '', dateTo: '', tag: '' };
+function isFiltering(){ return !!txFilter.query.trim() || txFilter.type !== 'all' || txFilter.category !== 'all' || !!txFilter.dateFrom || !!txFilter.dateTo || !!txFilter.tag; }
 
 function renderTransactions(t){
   const cats = txType === 'income' ? incomeCats() : expenseCats();
@@ -296,6 +305,10 @@ function renderTransactions(t){
         <label for="filter-date-to">To</label>
         <input type="date" id="filter-date-to" value="${txFilter.dateTo}">
       </div>
+      ${(function(){
+        const allTags = Array.from(new Set(state.transactions.flatMap(t => t.tags || [])));
+        return allTags.length ? `<div class="field"><label for="filter-tag">Tag</label><select id="filter-tag"><option value="">All</option>${allTags.map(t => `<option value="${escapeHtml(t)}"${txFilter.tag === t ? ' selected' : ''}>#${escapeHtml(t)}</option>`).join('')}</select></div>` : '';
+      })()}
     </div>
     <div class="filter-summary" role="status" aria-live="polite">
       <span id="filter-count">${filtering ? `Showing ${filtered.length} of ${state.transactions.length} entries` : `${state.transactions.length} entries`}</span>
@@ -337,9 +350,13 @@ function renderTransactions(t){
         </div>
       </div>
       <div class="form-row">
-        <div class="field" style="flex: 3;">
+        <div class="field" style="flex: 2;">
           <label for="tx-note">Note (optional)</label>
           <input type="text" id="tx-note" placeholder="e.g. groceries at the market" list="note-suggestions">
+        </div>
+        <div class="field" style="flex: 1;">
+          <label for="tx-tags">Tags (optional)</label>
+          <input type="text" id="tx-tags" placeholder="#trip #tax">
         </div>
       </div>
       <button class="btn" id="add-tx-btn">Add entry</button>
@@ -441,6 +458,13 @@ function renderTransactions(t){
               <span class="desc">${label}</span>
               <span class="cat-tag">${escapeHtml(r.category)}</span>
               <span class="cat-tag">Day ${r.dayOfMonth || 1}</span>
+              <span class="cat-tag next-occ">${(function(){
+                const now = new Date();
+                const key = r.id + ':' + now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+                const genThisMonth = state.recurringGenerated && state.recurringGenerated[key];
+                const nextDate = genThisMonth ? new Date(now.getFullYear(), now.getMonth()+1, Math.min(r.dayOfMonth||1, new Date(now.getFullYear(), now.getMonth()+2, 0).getDate())) : new Date(now.getFullYear(), now.getMonth(), Math.min(r.dayOfMonth||1, new Date(now.getFullYear(), now.getMonth()+1, 0).getDate()));
+                return 'Next: ' + nextDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+              })()}</span>
             </div>
             <div class="right">
               <span class="amt ${r.type}">${r.type==='expense'?'-':'+'}${fmt(r.amount)}</span>
@@ -543,7 +567,10 @@ function attachTransactionHandlers(t){
       const category = document.getElementById('tx-category').value;
       const date = document.getElementById('tx-date').value || todayISO();
       const note = document.getElementById('tx-note').value.trim();
+      const tagsRaw = (document.getElementById('tx-tags') || {}).value || '';
+      const tags = tagsRaw.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean);
       const entry = { type: txType, category, date, note };
+      if(tags.length) entry.tags = tags;
       if(isForeign){
         entry.originalAmount = toCents(amountEl.value);
         entry.currency = curSel.value;
@@ -551,7 +578,7 @@ function attachTransactionHandlers(t){
       } else {
         entry.amount = toCents(amountEl.value);
       }
-      clearFields(['tx-amount', 'tx-equiv', 'tx-category', 'tx-date', 'tx-note']);
+      clearFields(['tx-amount', 'tx-equiv', 'tx-category', 'tx-date', 'tx-note', 'tx-tags']);
       if(curSel) curSel.value = userCurrency();
       const row = document.querySelector('.tx-equiv-row');
       if(row) row.style.display = 'none';
@@ -569,10 +596,12 @@ function attachTransactionHandlers(t){
     const dateToEl = document.getElementById('filter-date-to');
     if(dateFromEl) dateFromEl.addEventListener('change', (e) => { txFilter.dateFrom = e.target.value; render(); });
     if(dateToEl) dateToEl.addEventListener('change', (e) => { txFilter.dateTo = e.target.value; render(); });
+    const tagEl = document.getElementById('filter-tag');
+    if(tagEl) tagEl.addEventListener('change', (e) => { txFilter.tag = e.target.value; render(); });
     const clearBtn = document.getElementById('filter-clear');
     if(clearBtn) clearBtn.addEventListener('click', () => {
-      txFilter = { query: '', type: 'all', category: 'all', dateFrom: '', dateTo: '' };
-      clearFields(['filter-query', 'filter-type', 'filter-category', 'filter-date-from', 'filter-date-to']);
+      txFilter = { query: '', type: 'all', category: 'all', dateFrom: '', dateTo: '', tag: '' };
+      clearFields(['filter-query', 'filter-type', 'filter-category', 'filter-date-from', 'filter-date-to', 'filter-tag']);
       pendingFocus = '#filter-query';
       render();
     });

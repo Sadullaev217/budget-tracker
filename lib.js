@@ -111,16 +111,18 @@ function transactionsToCSV(transactions){
 }
 
 // Case-insensitive text match on note and category, plus exact type/category filters.
-function filterTransactions(transactions, { query = '', type = 'all', category = 'all', dateFrom = '', dateTo = '' } = {}){
+function filterTransactions(transactions, { query = '', type = 'all', category = 'all', dateFrom = '', dateTo = '', tag = '' } = {}){
   const q = String(query).trim().toLowerCase();
   const from = dateFrom || '';
   const to = dateTo || '';
+  const t_tag = String(tag || '').trim().toLowerCase();
   return transactions.filter(t =>
     (type === 'all' || t.type === type) &&
     (category === 'all' || t.category === category) &&
     (!from || String(t.date) >= from) &&
     (!to || String(t.date) <= to) &&
-    (!q || String(t.note || '').toLowerCase().includes(q) || String(t.category || '').toLowerCase().includes(q))
+    (!q || String(t.note || '').toLowerCase().includes(q) || String(t.category || '').toLowerCase().includes(q)) &&
+    (!t_tag || (t.tags && t.tags.some(tg => tg.toLowerCase() === t_tag)))
   );
 }
 

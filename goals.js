@@ -33,6 +33,11 @@ function renderGoals(){
           const cls = progressPct >= timePct ? 'on-track' : 'behind';
           return '<div class="goal-deadline ' + cls + '">Save ' + fmt(perMonth) + '/mo to reach goal by ' + escapeHtml(dlLabel) + ' (' + monthsLeft + ' mo left)</div>';
         })()}
+        ${(g.contributions && g.contributions.length) ? `
+        <details class="goal-history">
+          <summary>History (${g.contributions.length})</summary>
+          <ul class="contrib-list">${g.contributions.slice(-5).reverse().map(c => `<li><span>${c.date}</span><span>+${fmt(c.amount)}</span></li>`).join('')}${g.contributions.length > 5 ? `<li class="contrib-more">…and ${g.contributions.length - 5} earlier</li>` : ''}</ul>
+        </details>` : ''}
         <div class="goal-actions">
           <input type="number" min="0" step="0.01" placeholder="Amount" inputmode="decimal" id="contrib-${g.id}" aria-label="Amount to add to ${escapeHtml(g.name)}">
           <button class="btn ghost" data-contribute="${g.id}">Add funds</button>

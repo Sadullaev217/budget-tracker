@@ -31,7 +31,7 @@ function renderChart(series){
       : `M${x},${baselineY} L${x+barW},${baselineY}`;
     const valueText = fmt(s.total);
     return `
-      <g class="chart-bar-group" tabindex="0" role="img" aria-label="${s.label}: ${valueText}" data-month="${s.label}" data-value="${valueText}" data-cx="${cx}" data-top="${y}">
+      <g class="chart-bar-group" tabindex="0" role="img" aria-label="${s.label}: ${valueText}" data-month="${s.label}" data-month-key="${s.key}" data-value="${valueText}" data-cx="${cx}" data-top="${y}" style="cursor:pointer">
         <text class="chart-value-label" x="${cx}" y="${Math.max(y-6, 12)}" text-anchor="middle">${compact ? shortAmt(s.total) : valueText}</text>
         <path class="chart-bar" d="${path}"></path>
         <text class="chart-axis-label" x="${cx}" y="${H-8}" text-anchor="middle" aria-hidden="true">${s.label}</text>
@@ -67,13 +67,13 @@ function renderCategoryChart(byCategory){
     const x2 = cx + R * Math.cos(endAngle), y2 = cy + R * Math.sin(endAngle);
     const color = categoryColor(cat);
     const path = entries.length === 1
-      ? `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${color}" opacity="0.85"/>`
-      : `<path d="M${cx},${cy} L${x1},${y1} A${R},${R} 0 ${large} 1 ${x2},${y2} Z" fill="${color}" opacity="0.85"/>`;
+      ? `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${color}" opacity="0.85" data-cat-click="${escapeHtml(cat)}" style="cursor:pointer"/>`
+      : `<path d="M${cx},${cy} L${x1},${y1} A${R},${R} 0 ${large} 1 ${x2},${y2} Z" fill="${color}" opacity="0.85" data-cat-click="${escapeHtml(cat)}" style="cursor:pointer"/>`;
     startAngle = endAngle;
     return { path, cat, amt, pct: Math.round(frac * 100), color };
   });
   const legend = slices.map(s =>
-    `<div class="chart-legend-item"><span class="legend-dot" style="background:${s.color}"></span>${escapeHtml(s.cat)} <span class="legend-pct">${s.pct}%</span></div>`
+    `<div class="chart-legend-item" data-cat-click="${escapeHtml(s.cat)}" style="cursor:pointer" role="button" tabindex="0"><span class="legend-dot" style="background:${s.color}"></span>${escapeHtml(s.cat)} <span class="legend-pct">${s.pct}%</span></div>`
   ).join('');
   return `
     <div class="cat-chart-wrap">
@@ -271,4 +271,27 @@ function attachChartHandlers(){
     document.querySelectorAll('.trend-point'),
     g => `${escapeHtml(g.dataset.month)} — <span class="val">${escapeHtml(g.dataset.value)}</span>`
   );
+
+  // Click bar chart → filter transactions to that month
+  document.querySelectorAll('.chart-bar-group[data-month-key]').forEach(g => {
+    g.addEventListener('click', () => {
+      const key = g.dataset.monthKey;
+      const daysInMonth = new Date(parseInt(key.slice(0,4)), parseInt(key.slice(5,7)), 0).getDate();
+      txFilter = { query: '', type: 'expense', category: 'all', dateFrom: key + '-01', dateTo: key + '-' + String(daysInMonth).padStart(2, '0'), tag: '' };
+      activeTab = 'transactions';
+      render();
+    });
+  });
+
+  // Click donut slice or legend → filter transactions to that category
+  document.querySelectorAll('[data-cat-click]').forEach(el => {
+    const handler = () => {
+      txFilter = { query: '', type: 'expense', category: el.dataset.catClick, dateFrom: '', dateTo: '', tag: '' };
+      activeTab = 'transactions';
+      pendingFocus = '#filter-category';
+      render();
+    };
+    el.addEventListener('click', handler);
+    el.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); handler(); } });
+  });
 }

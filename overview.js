@@ -126,7 +126,10 @@ function renderOverview(){
   }
 
   return `
-    ${rangePicker}
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+      <div style="flex:1">${rangePicker}</div>
+      <button type="button" class="btn ghost" id="download-report-btn" style="font-size:0.78rem;padding:6px 14px;">Download report</button>
+    </div>
     ${alertsHtml}
     ${trendText ? `<div class="trend-insight">${trendText}</div>` : ''}
     <div class="bento-grid">
