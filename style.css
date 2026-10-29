@@ -642,6 +642,28 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
   font-size: 0.8rem;
   margin: -4px 0 14px;
 }
+.auth-message{
+  color: var(--income-text);
+  background: var(--income-bg);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  margin: -4px 0 14px;
+}
+.auth-forgot{
+  text-align: center;
+  margin-top: 12px;
+}
+.link-btn{
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .auth-note{
   text-align:center;
   color: var(--text-dimmer);

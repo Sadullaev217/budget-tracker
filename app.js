@@ -19,6 +19,7 @@ let currentUser = null;
 let currentUserId = null;
 let authMode = 'signin';
 let authError = '';
+let authMessage = '';
 
 // localISO, toCents, fmt, escapeHtml, migrateData, sumTotals, sumDay and
 // monthlyExpenseSeries live in lib.js (loaded first, and unit-tested).
@@ -33,6 +34,11 @@ function toggleTheme(){
   const next = current === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
   try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+  if(currentUser){
+    if(!state.settings) state.settings = {};
+    state.settings.theme = next;
+    save();
+  }
   render();
 }
 
@@ -58,6 +64,7 @@ async function signOut(){
   activeTab = 'overview';
   authMode = 'signin';
   authError = '';
+  authMessage = '';
   backupStatus = { msg: '', isError: false };
   editingId = null;
   txFilter = { query: '', type: 'all', category: 'all', dateFrom: '', dateTo: '' };
@@ -93,6 +100,10 @@ async function loadUserData(){
     }
   }catch(e){}
   generateRecurring();
+  if(state.settings && state.settings.theme){
+    document.documentElement.setAttribute('data-theme', state.settings.theme);
+    try{ localStorage.setItem(THEME_KEY, state.settings.theme); }catch(e){}
+  }
 }
 
 // Auto-generate transactions from recurring templates for the current month.
@@ -105,9 +116,17 @@ function generateRecurring(){
 }
 
 async function restoreSession(){
+  sb.auth.onAuthStateChange((event) => {
+    if(event === 'PASSWORD_RECOVERY'){
+      authMode = 'newpassword';
+      currentUser = null;
+      currentUserId = null;
+      render();
+    }
+  });
   try {
     const { data: { session } } = await sb.auth.getSession();
-    if(session){
+    if(session && authMode !== 'newpassword'){
       currentUser = session.user.email;
       currentUserId = session.user.id;
       await loadUserData();
