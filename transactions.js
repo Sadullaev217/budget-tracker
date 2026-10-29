@@ -9,6 +9,7 @@
 //   currentUser, monthKey.
 
 let editingId = null;
+let editingRecurringId = null;
 const EDIT_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
 
 function renderLedgerLine(tx){
@@ -105,6 +106,108 @@ function saveEdit(){
   tx.note = document.getElementById('edit-note').value.trim();
   save();
   stopEdit();
+}
+
+function renderRecurringEditForm(r){
+  const cats = r.type === 'income' ? incomeCats() : expenseCats();
+  const catOpts = cats.map(c => `<option value="${escapeHtml(c)}"${c === r.category ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  return `
+    <form class="ledger-line editing" id="rec-edit-form">
+      <div class="form-row">
+        <div class="field" style="flex: 0 0 110px;">
+          <label for="rec-edit-type">Type</label>
+          <select id="rec-edit-type">
+            <option value="expense"${r.type==='expense'?' selected':''}>Expense</option>
+            <option value="income"${r.type==='income'?' selected':''}>Income</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="rec-edit-amount">Amount</label>
+          <input type="number" id="rec-edit-amount" step="0.01" min="0" value="${(r.amount/100).toFixed(2)}" inputmode="decimal">
+        </div>
+        <div class="field">
+          <label for="rec-edit-category">Category</label>
+          <select id="rec-edit-category">${catOpts}</select>
+        </div>
+        <div class="field" style="flex: 0 0 90px;">
+          <label for="rec-edit-day">Day</label>
+          <input type="number" id="rec-edit-day" min="1" max="31" value="${r.dayOfMonth || 1}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field" style="flex: 3;">
+          <label for="rec-edit-note">Note (optional)</label>
+          <input type="text" id="rec-edit-note" value="${escapeHtml(r.note || '')}">
+        </div>
+      </div>
+      <div class="edit-actions">
+        <button type="submit" class="btn">Save</button>
+        <button type="button" class="btn ghost" id="rec-edit-cancel">Cancel</button>
+      </div>
+    </form>
+  `;
+}
+
+function startRecurringEdit(id){
+  editingRecurringId = id;
+  pendingFocus = '#rec-edit-amount';
+  render();
+}
+function stopRecurringEdit(){
+  const id = editingRecurringId;
+  editingRecurringId = null;
+  pendingFocus = id ? `[data-edit-recurring="${CSS.escape(id)}"]` : null;
+  render();
+}
+function saveRecurringEdit(){
+  const r = (state.recurring || []).find(x => x.id === editingRecurringId);
+  if(!r){ stopRecurringEdit(); return; }
+  const amountEl = document.getElementById('rec-edit-amount');
+  if(!validateFields([[amountEl, amountError(amountEl.value)]])) return;
+  r.type = document.getElementById('rec-edit-type').value === 'income' ? 'income' : 'expense';
+  r.amount = toCents(amountEl.value);
+  r.category = document.getElementById('rec-edit-category').value;
+  r.dayOfMonth = Math.max(1, Math.min(31, parseInt(document.getElementById('rec-edit-day').value, 10) || 1));
+  r.note = document.getElementById('rec-edit-note').value.trim();
+  save();
+  stopRecurringEdit();
+}
+
+function renderRecurringPreview(){
+  if(!state.recurring || !state.recurring.length) return '';
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthLabel = nextMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+  const daysInMonth = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate();
+  const entries = state.recurring.map(r => {
+    const day = Math.min(r.dayOfMonth || 1, daysInMonth);
+    const date = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    return { ...r, previewDate: date };
+  }).sort((a, b) => a.previewDate < b.previewDate ? -1 : 1);
+  const total = entries.reduce((s, r) => s + (r.type === 'expense' ? -r.amount : r.amount), 0);
+  return `
+    <div class="card">
+      <h2>Next month preview</h2>
+      <p class="card-help">These entries will be auto-generated for ${monthLabel}.</p>
+      <div class="recurring-list">
+        ${entries.map(r => `
+          <div class="ledger-line">
+            <div class="info">
+              <span class="desc">${escapeHtml(r.note || r.category)}</span>
+              <span class="cat-tag">${escapeHtml(r.category)}</span>
+              <span class="cat-tag">${r.previewDate}</span>
+            </div>
+            <div class="right">
+              <span class="amt ${r.type}">${r.type==='expense'?'-':'+'}${fmt(r.amount)}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="preview-total" style="text-align:right;padding:8px 0;font-weight:600;">
+        Net impact: <span class="${total > 0 ? 'net-positive' : total < 0 ? 'net-negative' : ''}">${total > 0 ? '+' : total < 0 ? '-' : ''}${fmt(Math.abs(total))}</span>
+      </div>
+    </div>
+  `;
 }
 
 let txFilter = { query: '', type: 'all', category: 'all', dateFrom: '', dateTo: '' };
@@ -290,21 +393,26 @@ function renderTransactions(t){
       </div>
       ${state.recurring && state.recurring.length ? `
       <div class="recurring-list">
-        ${state.recurring.map(r => `
+        ${state.recurring.map(r => {
+          if(r.id === editingRecurringId) return renderRecurringEditForm(r);
+          const label = escapeHtml(r.note || r.category);
+          return `
           <div class="ledger-line">
             <div class="info">
-              <span class="desc">${escapeHtml(r.note || r.category)}</span>
+              <span class="desc">${label}</span>
               <span class="cat-tag">${escapeHtml(r.category)}</span>
               <span class="cat-tag">Day ${r.dayOfMonth || 1}</span>
             </div>
             <div class="right">
               <span class="amt ${r.type}">${r.type==='expense'?'-':'+'}${fmt(r.amount)}</span>
-              <button type="button" class="del" data-del-recurring="${r.id}" aria-label="Remove recurring ${escapeHtml(r.note || r.category)}"><span aria-hidden="true">✕</span></button>
+              <button type="button" class="del edit" data-edit-recurring="${r.id}" aria-label="Edit recurring ${label}">${EDIT_ICON}</button>
+              <button type="button" class="del" data-del-recurring="${r.id}" aria-label="Remove recurring ${label}"><span aria-hidden="true">✕</span></button>
             </div>
-          </div>
-        `).join('')}
+          </div>`;
+        }).join('')}
       </div>` : ''}
     </div>
+    ${renderRecurringPreview()}
     <div class="card">
       <h2>Backup</h2>
       <p class="card-help">Your data lives only in this browser. Export a backup so clearing browser data can't wipe it.</p>
@@ -509,6 +617,21 @@ function attachTransactionHandlers(t){
       });
     });
   });
+  document.querySelectorAll('[data-edit-recurring]').forEach(btn => {
+    btn.addEventListener('click', () => startRecurringEdit(btn.dataset.editRecurring));
+  });
+  const recEditForm = document.getElementById('rec-edit-form');
+  if(recEditForm){
+    recEditForm.addEventListener('submit', (e) => { e.preventDefault(); saveRecurringEdit(); });
+    document.getElementById('rec-edit-cancel').addEventListener('click', stopRecurringEdit);
+    recEditForm.addEventListener('keydown', (e) => { if(e.key === 'Escape'){ e.preventDefault(); stopRecurringEdit(); } });
+    const recEditTypeSel = document.getElementById('rec-edit-type');
+    recEditTypeSel.addEventListener('change', () => {
+      const catSel = document.getElementById('rec-edit-category');
+      const list = recEditTypeSel.value === 'income' ? incomeCats() : expenseCats();
+      catSel.innerHTML = list.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    });
+  }
 
   const exportJsonBtn = document.getElementById('export-json-btn');
   if(exportJsonBtn){
