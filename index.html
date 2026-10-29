@@ -6,6 +6,10 @@
 <title>Ledger — Budget Tracker</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <script>
   // Apply the saved/system theme before first paint so there's no light-to-dark flash.
@@ -21,7 +25,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 <div class="app" id="app">
@@ -31,13 +35,39 @@
 <div class="toast-region" id="toast-region" role="status" aria-live="polite"></div>
 
 <!-- ?v= keeps scripts in step after a deploy (Pages caches assets for 10 min). Bump on release. -->
-<script src="lib.js?v=15"></script>
-<script src="auth.js?v=15"></script>
-<script src="chart.js?v=15"></script>
-<script src="calendar.js?v=15"></script>
-<script src="transactions.js?v=15"></script>
-<script src="goals.js?v=15"></script>
-<script src="app.js?v=15"></script>
-<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
+<script src="lib.js?v=16"></script>
+<script src="auth.js?v=16"></script>
+<script src="chart.js?v=16"></script>
+<script src="calendar.js?v=16"></script>
+<script src="transactions.js?v=16"></script>
+<script src="goals.js?v=16"></script>
+<script src="app.js?v=16"></script>
+<script>
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').then(function(reg){
+    reg.addEventListener('updatefound', function(){
+      var newSW = reg.installing;
+      if(!newSW) return;
+      newSW.addEventListener('statechange', function(){
+        if(newSW.state === 'installed' && navigator.serviceWorker.controller){
+          showUpdateBanner(reg);
+        }
+      });
+    });
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    window.location.reload();
+  });
+}
+function showUpdateBanner(reg){
+  var bar = document.createElement('div');
+  bar.className = 'update-banner';
+  bar.innerHTML = 'A new version is available. <button type="button" id="update-btn">Update now</button>';
+  document.body.prepend(bar);
+  document.getElementById('update-btn').addEventListener('click', function(){
+    if(reg.waiting) reg.waiting.postMessage('skipWaiting');
+  });
+}
+</script>
 </body>
 </html>

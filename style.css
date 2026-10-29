@@ -752,3 +752,41 @@ input[aria-invalid="true"]{ border-color: var(--expense-text); }
 
 /* Goal linked category */
 .goal-linked{ font-size: 0.78rem; opacity: 0.65; margin-top: 4px; }
+
+/* PWA update banner */
+.update-banner{
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 10px 16px;
+  background: var(--navy); color: var(--on-solid);
+  font-size: 0.88rem; font-family: 'IBM Plex Sans', sans-serif;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.update-banner button{
+  background: var(--on-solid); color: var(--navy);
+  border: none; border-radius: 6px; padding: 6px 14px;
+  font-weight: 600; font-size: 0.82rem; cursor: pointer;
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+.update-banner button:hover{ opacity: 0.9; }
+
+/* PWA install prompt */
+.install-banner{
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  margin-bottom: 16px; font-size: 0.88rem;
+}
+.install-banner button{
+  background: var(--navy); color: var(--on-solid);
+  border: none; border-radius: 6px; padding: 6px 14px;
+  font-weight: 600; font-size: 0.82rem; cursor: pointer;
+  font-family: 'IBM Plex Sans', sans-serif;
+  white-space: nowrap;
+}
+.install-banner button:hover{ opacity: 0.9; }
+.install-banner .dismiss{
+  background: none; color: var(--text-dim);
+  padding: 6px 8px; font-size: 0.78rem;
+}
+.install-banner .dismiss:hover{ text-decoration: underline; }

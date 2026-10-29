@@ -343,6 +343,7 @@ function render(){
   else panels.innerHTML = renderGoals();
 
   attachPanelHandlers(t);
+  if(deferredInstallPrompt) showInstallBanner();
   restoreDrafts(drafts);
   restoreFocus(focusSel);
 }
@@ -462,6 +463,35 @@ function attachPanelHandlers(t){
 
   attachTransactionHandlers(t);
   attachGoalHandlers();
+}
+
+// PWA install prompt — capture the browser event and offer an install banner.
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if(currentUser) showInstallBanner();
+});
+
+function showInstallBanner(){
+  if(!deferredInstallPrompt) return;
+  if(document.querySelector('.install-banner')) return;
+  const panels = document.getElementById('panels');
+  if(!panels) return;
+  const bar = document.createElement('div');
+  bar.className = 'install-banner';
+  bar.innerHTML = '<span>Install Ledger for quick access and offline use.</span>'
+    + '<button type="button" id="install-btn">Install</button>'
+    + '<button type="button" class="dismiss" id="install-dismiss">Not now</button>';
+  panels.prepend(bar);
+  document.getElementById('install-btn').addEventListener('click', () => {
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.then(() => { deferredInstallPrompt = null; bar.remove(); });
+  });
+  document.getElementById('install-dismiss').addEventListener('click', () => {
+    bar.remove();
+    deferredInstallPrompt = null;
+  });
 }
 
 restoreSession();

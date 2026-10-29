@@ -1,10 +1,28 @@
 // Service worker — caches the app shell so the tracker works offline.
 // Network-first for all requests: always try the network, fall back to cache.
-// This avoids stale-asset bugs from version string drift between index.html and sw.js.
-const CACHE_NAME = 'ledger-v1';
+const CACHE_NAME = 'ledger-v2';
+
+const APP_SHELL = [
+  './',
+  './index.html',
+  './style.css',
+  './lib.js',
+  './auth.js',
+  './chart.js',
+  './calendar.js',
+  './transactions.js',
+  './goals.js',
+  './app.js',
+  './icon.svg',
+  './manifest.json'
+];
 
 self.addEventListener('install', event => {
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(APP_SHELL))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', event => {
@@ -31,4 +49,8 @@ self.addEventListener('fetch', event => {
       })
       .catch(() => caches.match(event.request))
   );
+});
+
+self.addEventListener('message', event => {
+  if(event.data === 'skipWaiting') self.skipWaiting();
 });
